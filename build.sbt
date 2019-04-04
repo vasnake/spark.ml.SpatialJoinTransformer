@@ -1,3 +1,6 @@
+// spark-transformer-spatial-join
+// spark.transformer.BroadcastSpatialJoin
+
 lazy val root = (project in file(".")).settings(
   inThisBuild(List(
     organization := "me.valik",
@@ -25,7 +28,9 @@ lazy val root = (project in file(".")).settings(
 
     "org.scalatest" %% "scalatest" % "3.0.5" % "test",
     "org.scalacheck" %% "scalacheck" % "1.14.0" % "test"
-    // "com.holdenkarau" %% "spark-testing-base" % "2.4.0_0.11.0" % "test"
+
+    // unresolved dependency: com.holdenkarau#spark-testing-base_2.12;2.4.0_0.11.0
+//    "com.holdenkarau" %% "spark-testing-base" % "2.4.0_0.11.0" % "test"
   ),
 
   pomIncludeRepository := { x => false },
