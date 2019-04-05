@@ -9,17 +9,18 @@ val ScalaVersion = "2.12.8"
 val SparkVersion = "2.4.0"
 
 val sparkDeps = Seq(
-  "org.apache.spark" %% "spark-streaming" % SparkVersion,
-  "org.apache.spark" %% "spark-sql" % SparkVersion
+  //"org.apache.spark" %% "spark-streaming" % SparkVersion,
+  //"org.apache.spark" %% "spark-sql" % SparkVersion,
+  "org.apache.spark" %% "spark-core" % SparkVersion
 )
 
 val testDeps = Seq(
   "org.scalatest" %% "scalatest" % "3.0.5",
-  "org.scalacheck" %% "scalacheck" % "1.14.0"
+  "org.scalacheck" %% "scalacheck" % "1.14.0",
 
   // not ready yet: unresolved dependency: com.holdenkarau#spark-testing-base_2.12;2.4.0_0.11.0
   // use local lib (sbt +package) from https://github.com/vasnake/spark-testing-base
-  // "com.holdenkarau" %% "spark-testing-base" % "2.4.0_0.11.0"
+   "com.holdenkarau" %% "spark-testing-base" % "2.4.0_0.11.0"
 )
 
 val buildSettings = Seq(
