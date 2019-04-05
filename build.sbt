@@ -6,11 +6,13 @@ val Name = "spark-transformer-spatialjoin"
 val Version = "0.0.1-SNAPSHOT"
 
 val ScalaVersion = "2.12.8"
-val SparkVersion = "2.4.0"
+val SparkVersion = "2.4.1"
 
 val sparkDeps = Seq(
   //"org.apache.spark" %% "spark-streaming" % SparkVersion,
   //"org.apache.spark" %% "spark-sql" % SparkVersion,
+  //"org.apache.spark" %% "spark-hive" % SparkVersion,
+  "org.apache.spark" %% "spark-mllib" % SparkVersion,
   "org.apache.spark" %% "spark-core" % SparkVersion
 )
 
