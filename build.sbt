@@ -1,36 +1,63 @@
 // me.valik.spark %% spark-transformer-spatialjoin % 0.0.1
 // me.valik.spark.transformer.BroadcastSpatialJoin
 
-lazy val root = (project in file(".")).settings(
-  inThisBuild(List(
-    organization := "me.valik.spark",
-    scalaVersion := "2.12.8"
-  )),
-  name := "spark-transformer-spatialjoin",
-  version := "0.0.1-SNAPSHOT",
+val Organization = "me.valik.spark"
+val Name = "spark-transformer-spatialjoin"
+val Version = "0.0.1-SNAPSHOT"
 
+val ScalaVersion = "2.12.8"
+val SparkVersion = "2.4.0"
+
+val sparkDeps = Seq(
+  "org.apache.spark" %% "spark-streaming" % SparkVersion,
+  "org.apache.spark" %% "spark-sql" % SparkVersion
+)
+
+val testDeps = Seq(
+  "org.scalatest" %% "scalatest" % "3.0.5",
+  "org.scalacheck" %% "scalacheck" % "1.14.0"
+
+  // not ready yet: unresolved dependency: com.holdenkarau#spark-testing-base_2.12;2.4.0_0.11.0
+  // use local lib (sbt +package) from https://github.com/vasnake/spark-testing-base
+  // "com.holdenkarau" %% "spark-testing-base" % "2.4.0_0.11.0"
+)
+
+val buildSettings = Seq(
+  organization := Organization,
+  name := Name,
+  version := Version,
+  scalaVersion := ScalaVersion,
   javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
   javaOptions ++= Seq("-Xms512M", "-Xmx2048M", "-XX:+CMSClassUnloadingEnabled"),
-  scalacOptions ++= Seq("-deprecation", "-unchecked"),
-  parallelExecution in Test := false,
-  fork := true,
+  scalacOptions ++= Seq("-deprecation", "-unchecked", "-feature", "-encoding", "UTF-8"),
+  // assembly parameters
+  test in assembly := {},
+  assemblyOption in assembly := (assemblyOption in assembly).value.copy(
+    includeScala = false, includeDependency = true),
+  // temp lib fix
+  assemblyMergeStrategy in assembly := {
+    case n if n.contains("holdenkarau") => MergeStrategy.discard
+    case x => (assemblyMergeStrategy in assembly).value(x)
+  }
+)
 
-  resolvers ++= Seq(
-    "sonatype-releases" at "https://oss.sonatype.org/content/repositories/releases/",
-    "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/",
-    "Second Typesafe repo" at "http://repo.typesafe.com/typesafe/maven-releases/",
-    Resolver.sonatypeRepo("public")
-  ),
+resolvers ++= Seq(
+  "sonatype-releases" at "https://oss.sonatype.org/content/repositories/releases/",
+  "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/",
+  "Second Typesafe repo" at "http://repo.typesafe.com/typesafe/maven-releases/",
+  Resolver.sonatypeRepo("public")
+)
 
-  libraryDependencies ++= Seq(
-    "org.apache.spark" %% "spark-streaming" % "2.4.0" % "provided",
-    "org.apache.spark" %% "spark-sql" % "2.4.0" % "provided",
+// spark testing tuning
+parallelExecution in Test := false
+fork := true
+concurrentRestrictions in Scope.Global += Tags.limit(Tags.Test, 1)
 
-    "org.scalatest" %% "scalatest" % "3.0.5" % "test",
-    "org.scalacheck" %% "scalacheck" % "1.14.0" % "test"
-
-    // not ready yet: unresolved dependency: com.holdenkarau#spark-testing-base_2.12;2.4.0_0.11.0
-    // "com.holdenkarau" %% "spark-testing-base" % "2.4.0_0.11.0" % "test"
+// project
+lazy val root = (project in file(".")).settings(
+  buildSettings ++ Seq(
+    libraryDependencies ++= sparkDeps.map(_ % Provided)
+      ++ testDeps.map(_ % Test)
   )
 
   // no pom publishing
