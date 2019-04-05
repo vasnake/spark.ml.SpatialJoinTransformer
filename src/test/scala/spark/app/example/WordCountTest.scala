@@ -1,4 +1,4 @@
-package me.valik.SpatialJoinTransformer
+package spark.app.example
 
 /**
  * A simple test for everyone's favourite wordcount example.
