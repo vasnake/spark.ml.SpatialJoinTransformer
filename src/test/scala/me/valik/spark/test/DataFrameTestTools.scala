@@ -4,6 +4,8 @@ import org.scalatest._
 import org.apache.spark.sql.{Row, SparkSession}
 import com.holdenkarau.spark.testing.SparkSessionProvider
 
+import scala.util.Try
+
 trait SparkProvider {
   protected def loadSpark(): SparkSession
   protected implicit lazy val spark: SparkSession = loadSpark()
@@ -77,7 +79,7 @@ trait DataFrameTestTools {
   }
 
   private def schemaMismatchMessage(actualDS: DataFrame, expectedDS: DataFrame): String = {
-    s"""
+    s"""not schema.equals
 Actual Schema:
 ${actualDS.schema}
 Expected Schema:
@@ -86,7 +88,7 @@ ${expectedDS.schema}
   }
 
   private def contentMismatchMessage(actualDS: DataFrame, expectedDS: DataFrame): String = {
-    s"""
+    s"""not sameElements
 Actual DataFrame Content:
 ${DataFramePrettyPrint.toString(actualDS.toDF(), 20)}
 Expected DataFrame Content:
@@ -152,14 +154,12 @@ object DataFramePrettyPrint {
 
     val res = new StringBuilder
 
-    // Create SeparateLine
+    // draw top line
     val sep: String = colWidths.map("-" * _).addString(res, "+", "+", "+\n").toString
-    // first line
-    res.append(sep)
 
     // names + data
     rows.zipWithIndex.foreach { case (row, rownum) => {
-      // table header: colnames
+      // underline table header: colnames
       if (rownum == 1) res.append(sep)
       // data rows
       row.zipWithIndex.map { case (cell, i) =>
