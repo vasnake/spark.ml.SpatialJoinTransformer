@@ -2,7 +2,7 @@ package me.valik.spark.transformer
 
 import org.scalatest._
 import com.holdenkarau.spark.testing.DataFrameSuiteBase
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.Row
 
 import me.valik.spark.test._
 
@@ -19,13 +19,13 @@ class BroadcastSpatialJoinTest extends
     val transformer = new BroadcastSpatialJoin()
     val output = transformer.transform(input)
 
-    output.show(3, truncate=false)
+    //output.show(3, truncate=false)
     assertDataFrameEquals(output, expected)
   }
 }
 
-class ContainmentJoinTest extends
-  FlatSpec with Matchers with SimpleLocalSpark with TestUtils {
+class ContainmentJoinDataFrameTest extends
+  FlatSpec with Matchers with SimpleLocalSpark with DataFrameTestTools {
 
   // testOnly me.valik.spark.transformer.ContainmentJoinTest -- -z "smoke"
   it should "pass smoke test" in {
@@ -41,6 +41,6 @@ class ContainmentJoinTest extends
       Row("2", "bar")
     )
 
-    assertDataFrame(res, expected)
+    assertDataFrameEquals(res, expected)
   }
 }
