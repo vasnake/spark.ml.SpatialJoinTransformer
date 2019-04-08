@@ -1,23 +1,46 @@
 package me.valik.spark.transformer
 
 import org.scalatest._
-import com.holdenkarau.spark.testing.SharedSparkContext
-import org.apache.spark.sql.SparkSession
+import com.holdenkarau.spark.testing.DataFrameSuiteBase
+import org.apache.spark.sql.{Row, SparkSession}
 
-class BroadcastSpatialJoinTest
-  extends FunSuite with SharedSparkContext {
-  override def reuseContextIfPossible: Boolean = false
+import me.valik.spark.test._
+
+class BroadcastSpatialJoinTest extends
+  FlatSpec with DataFrameSuiteBase {
 
   // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "smoke"
-  test("smoke test") {
-    val spark: SparkSession = SparkSession.builder.config(sc.getConf).getOrCreate
+  it should "pass smoke test" in {
     import spark.implicits._
+
     val input = Seq(("1", "2019-04-05", "37.6095", "55.9297")).toDF("id", "date", "lon", "lat")
+    val expected = Seq(("1", "foo"), ("2", "bar")).toDF("id", "data")
+
     val transformer = new BroadcastSpatialJoin()
     val output = transformer.transform(input)
+
     output.show(3, truncate=false)
-    assert(output.collect.sameElements(
-      Seq(("1", "foo"), ("2", "bar")).toDF("id", "data").collect
-    ))
+    assertDataFrameEquals(output, expected)
+  }
+}
+
+class ContainmentJoinTest extends
+  FlatSpec with Matchers with SimpleLocalSpark with TestUtils {
+
+  // testOnly me.valik.spark.transformer.ContainmentJoinTest -- -z "smoke"
+  it should "pass smoke test" in {
+    import spark.implicits._
+
+    val input = Seq(("1", "2019-04-05", "37.6095", "55.9297")).toDF("id", "date", "lon", "lat")
+    val expected = Seq(("1", "foo"), ("2", "bar")).toDF("id", "data")
+
+    val res = new BroadcastSpatialJoin().transform(input)
+    // res.show(3, truncate=false)
+    res.collect should contain theSameElementsAs Seq(
+      Row("1", "foo"),
+      Row("2", "bar")
+    )
+
+    assertDataFrame(res, expected)
   }
 }
