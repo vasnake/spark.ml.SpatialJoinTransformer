@@ -8,7 +8,7 @@ import scala.util.Try
 
 trait SparkProvider {
   protected def loadSpark(): SparkSession
-  protected implicit lazy val spark: SparkSession = loadSpark()
+  @transient protected implicit lazy val spark: SparkSession = loadSpark()
 }
 
 trait LocalSpark extends SparkProvider with BeforeAndAfterAll { this: Suite =>
