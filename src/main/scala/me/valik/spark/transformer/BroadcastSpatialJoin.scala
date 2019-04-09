@@ -110,6 +110,89 @@ class BroadcastSpatialJoin(override val uid: String) extends
   setDefault(numPartitions, "")
   def setNumPartitions(value: String): this.type = set(numPartitions, value)
 
+  // config
+
+  private lazy val config: TransformerConfig = getConfig
+
+  private def checkConfig(): Unit = {
+    val datasetNonEmptyGeometries = Seq(
+      $(datasetPoint).nonEmpty,
+      $(datasetWKT).nonEmpty
+    )
+
+    require(datasetNonEmptyGeometries.count(identity) == 1,
+      "You must specify one and only one property of (datasetWKT, datasetPoint)")
+
+    import me.valik.toolbox.StringToolbox.{RichString, DefaultSeparators}
+    import DefaultSeparators.oneSeparator
+
+    require($(datasetPoint).isEmpty || $(datasetPoint).splitTrim.length == 2,
+      "datasetPoint property should be empty or contain string like 'lon, lat'")
+    // TODO: check other parameters
+  }
+
+  private def getConfig: TransformerConfig = {
+    checkConfig()
+
+    val dataCols: Seq[String] = $(dataCol).splitTrim
+
+    val dataColsAlias = {
+      val dca = $(dataColAlias).splitTrim
+      dataCols.zipWithIndex.map { case (name, idx) =>
+        Try {
+          dca(idx)
+        }.getOrElse(name)
+      }
+    }
+
+    val df = loadDataset(datasetName)
+    val filterCols: Seq[String] = extraConditionCols($(condition), df)
+
+    val ds = {
+      val fltr = $(filter).trim
+      val cols = (dataCols ++
+        Seq($(datasetWkt), $(dsetlon), $(dsetlat)) ++
+        $(datasetSegment).splitTrim ++
+        $(datasetPoint).splitTrim ++
+        filterCols
+        ).filterNot(_.isEmpty).toSet.toList
+
+      val filtered = if (!fltr.isEmpty) df.filter(fltr) else df
+      val projected = filtered.select(cols.head, cols.tail: _*)
+      Try {
+        projected.repartition($(numPartitions).trim.toInt)
+      }.getOrElse(projected)
+    }
+
+    val pointCols = {
+      if ($(datasetPoint).splitTrim.size != 2) $(dsetlon) + "," + $(dsetlat)
+      else $(datasetPoint)
+    }
+
+    SpatialJoinTransformerConfig(
+      SpatialJoinTransformerDatasetConfig(
+        datasetName,
+        ds,
+        $(datasetWkt),
+        PointColumns(pointCols),
+        SegmentColumns($(datasetSegment)),
+        dataCols),
+      SpatialJoinTransformerInputConfig(
+        $(inputWkt), $(lon), $(lat),
+        $(inputKeys).splitTrim),
+      dataColsAlias,
+      $(distColAlias),
+      $(clockwiseColAlias),
+      $(predicate),
+      $(condition),
+      $(aggstatement),
+      $(broadcastSrc) == input,
+      parsedInputDateColumn,
+      $(intervalStartOffset),
+      $(intervalEndOffset)
+    )
+  }
+
   // transformer
 
   override def copy(extra: ParamMap): Transformer = defaultCopy(extra)
@@ -149,4 +232,43 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     * spatial op, one of: within, contains, intersects, overlaps, nearest
     */
   val nearest = "nearest"
+
+  case class TransformerConfig(
+    datasetCfg: DatasetConfig,
+    inputCfg: InputConfig,
+    dataColAlias: Seq[String],
+    distColAlias: String,
+    clockwiseAlias: String,
+    predicate: String,
+    extraPredicate: String,
+    aggStatement: String,
+    broadcastInput: Boolean,
+    inputDateColumn: Option[String],
+    intervalStartOffset: Int,
+    intervalEndOffset: Int
+  )
+
+  case class DatasetConfig(
+    name: String,
+    dataset: DataFrame,
+    wktColumn: String,
+    pointColumns: PointColumns,
+    dataColumns: Seq[String]
+  ) {
+    def isWkt = !wktColumn.isEmpty
+  }
+
+  case class InputConfig(
+    inputWkt: String,
+    inputLon: String,
+    inputLat: String,
+    inputKeyCols: Seq[String]
+  ) {
+    def isWkt = !inputWkt.isEmpty
+  }
+
+  case class PointColumns(lon: String, lat: String) {
+    def isEmpty = lon.isEmpty || lat.isEmpty
+  }
+
 }
