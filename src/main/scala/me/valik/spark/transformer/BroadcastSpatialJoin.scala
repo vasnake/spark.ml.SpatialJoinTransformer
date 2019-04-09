@@ -7,6 +7,8 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.ml.param.{Param, ParamMap, Params}
 import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, Identifiable}
 
+import scala.util.Try
+
 /**
   * spark.ml.transformer that join input dataframe with selected external dataset
   * using spatial relations between two geometry columns.
@@ -114,6 +116,9 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
   private lazy val config: TransformerConfig = getConfig
 
+  import me.valik.toolbox.StringToolbox.{RichString, DefaultSeparators}
+  import DefaultSeparators.oneSeparator
+
   private def checkConfig(): Unit = {
     val datasetNonEmptyGeometries = Seq(
       $(datasetPoint).nonEmpty,
@@ -123,25 +128,21 @@ class BroadcastSpatialJoin(override val uid: String) extends
     require(datasetNonEmptyGeometries.count(identity) == 1,
       "You must specify one and only one property of (datasetWKT, datasetPoint)")
 
-    import me.valik.toolbox.StringToolbox.{RichString, DefaultSeparators}
-    import DefaultSeparators.oneSeparator
-
     require($(datasetPoint).isEmpty || $(datasetPoint).splitTrim.length == 2,
       "datasetPoint property should be empty or contain string like 'lon, lat'")
+
     // TODO: check other parameters
   }
 
   private def getConfig: TransformerConfig = {
     checkConfig()
 
-    val dataCols: Seq[String] = $(dataCol).splitTrim
+    val dataCols: Seq[String] = $(dataColumns).splitTrim
 
-    val dataColsAlias = {
-      val dca = $(dataColAlias).splitTrim
+    val dataColAliases: Seq[String] = {
+      val dca = $(dataColumnAliases).splitTrim
       dataCols.zipWithIndex.map { case (name, idx) =>
-        Try {
-          dca(idx)
-        }.getOrElse(name)
+        dca.applyOrElse(idx, _ => name)
       }
     }
 
@@ -234,41 +235,38 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
   val nearest = "nearest"
 
   case class TransformerConfig(
-    datasetCfg: DatasetConfig,
-    inputCfg: InputConfig,
-    dataColAlias: Seq[String],
-    distColAlias: String,
-    clockwiseAlias: String,
-    predicate: String,
+    datasetCfg: ExternalDatasetConfig,
+    inputCfg: InputDatasetConfig,
+    distanceColumnAlias: String,
+    spatialPredicate: String,
     extraPredicate: String,
-    aggStatement: String,
-    broadcastInput: Boolean,
-    inputDateColumn: Option[String],
-    intervalStartOffset: Int,
-    intervalEndOffset: Int
+    broadcastInput: Boolean
   )
 
-  case class DatasetConfig(
+  abstract class DatasetConfig {
+    def isWKT: Boolean = wktColumn.nonEmpty
+    def wktColumn: String
+    def pointColumns: PointColumns
+  }
+
+  case class ExternalDatasetConfig(
     name: String,
-    dataset: DataFrame,
+    df: DataFrame,
+    numPartitions: Int,
+    filter: String,
     wktColumn: String,
     pointColumns: PointColumns,
-    dataColumns: Seq[String]
-  ) {
-    def isWkt = !wktColumn.isEmpty
-  }
+    dataColumns: Seq[String],
+    aliases: Seq[String]
+  ) extends DatasetConfig
 
-  case class InputConfig(
-    inputWkt: String,
-    inputLon: String,
-    inputLat: String,
-    inputKeyCols: Seq[String]
-  ) {
-    def isWkt = !inputWkt.isEmpty
-  }
+  case class InputDatasetConfig(
+    wktColumn: String,
+    pointColumns: PointColumns,
+  ) extends DatasetConfig
 
   case class PointColumns(lon: String, lat: String) {
-    def isEmpty = lon.isEmpty || lat.isEmpty
+    def isEmpty: Boolean = lon.isEmpty || lat.isEmpty
   }
 
 }
