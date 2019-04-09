@@ -12,6 +12,7 @@ import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, I
   * using spatial relations between two geometry columns.
   * Allows you to add selected columns (and `distance` column)
   * from external dataset to input dataset.
+  * Only inner join implemented for now.
   *
   * <br/><br/>
   * `input` aka `input dataset`: DataFrame to which transformer is applied, e.g.
@@ -25,6 +26,10 @@ import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, I
   * must be small enough to be broadcasted by spark.
   * By default `input` will be broadcasted and `external` will be iterated using flatMap to find
   * all the records from `input` that satisfy spatial relation (with `filter` and `condition`)
+  * <br/><br/>
+  * `geometry`: spatial data defined as column containing WKT-formatted primitives: points, polylines, polygons;
+  * WGS84 coordinate system expected (lon,lat decimal degrees GPS coordinates).
+  * Points can be represented as two columns: (lon, lat).
   *
   * @param uid pipeline stage id
   */
@@ -37,7 +42,10 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
   // parameters
 
-  // setJoinCondition("fulldate between start_ts and end_ts")
+  /**
+    * experimental feature: extra condition applied to joining records;
+    * e.g. `fulldate between start_ts and end_ts`
+    */
   final val condition = new Param[String](this, "condition", "extra predicate to push into SpatialJoin")
   setDefault(condition, "")
   def setJoinCondition(value: String): this.type = set(condition, value)
@@ -58,101 +66,56 @@ class BroadcastSpatialJoin(override val uid: String) extends
   setDefault(dataset, "")
   def setDataset(value: String): this.type = set(dataset, value)
 
-  final val dataColumns = new Param[String](this, "dataColumns", "external ds column names to join to input, csv")
+  final val dataColumns = new Param[String](this, "dataColumns", "external ds column names to join to input, in csv format")
   setDefault(dataColumns, "")
   def setDataColumns(value: String): this.type = set(dataColumns, value)
 
-  final val dataColAlias = new Param[String](this, "dataColAlias", "aliases for added data cols, csv")
-  setDefault(dataColAlias, "")
+  final val dataColumnAliases = new Param[String](this, "dataColumnAliases", "aliases for added data columns, in csv format")
+  setDefault(dataColumnAliases, "")
+  def setDataColAlias(value: String): this.type = set(dataColumnAliases, value)
 
-  def setDataColAlias(value: String) = set(dataColAlias, value)
-
-  final val distColAlias = new Param[String](this, "distColAlias", "alias for added distance col")
-  setDefault(distColAlias, "")
-  def setDistColAlias(value: String) = set(distColAlias, value)
-
-  /**
-    * Define segment direction around location point
-    */
-  final val clockwiseColAlias = new Param[String](this, "clockwiseColAlias", "alias for added is_clockwise col")
-  setDefault(clockwiseColAlias, "")
-  def setClockwiseColAlias(alias: String) = set(clockwiseColAlias, alias)
+  final val distanceColumnAlias = new Param[String](this, "distanceColumnAlias", "alias for added distance column")
+  setDefault(distanceColumnAlias, "")
+  def setDistColAlias(value: String): this.type = set(distanceColumnAlias, value)
 
   /**
     * Geometry column name in external DS
     */
-  final val datasetWkt = new Param[String](this, "datasetWkt", "external ds wkt column name")
-  setDefault(datasetWkt, "")
-  def setDatasetWkt(value: String) = set(datasetWkt, value)
-
-  // Dataset column names: lon, lat
-
-  @deprecated("use datasetPoint", "0.0.24")
-  final val dsetlon: Param[String] = new Param[String](this, "dsetlon", "dataset lon column name")
-
-  @deprecated("use datasetPoint", "0.0.24")
-  final val dsetlat: Param[String] = new Param[String](this, "dsetlat", "dataset lat column name")
-
-  setDefault(dsetlon, "")
-  setDefault(dsetlat, "")
-
-  @deprecated("use setDatasetPoint", "0.0.24")
-  def setDatasetLon(value: String) = set(dsetlon, value)
-
-  @deprecated("use setDatasetPoint", "0.0.24") //"-Xfatal-warnings",
-  def setDatasetLat(value: String) = set(dsetlat, value)
+  final val datasetWKT = new Param[String](this, "datasetWKT", "external ds geometry column name")
+  setDefault(datasetWKT, "")
+  def setDatasetWKT(value: String): this.type = set(datasetWKT, value)
 
   /**
-    * Dataset geometry columns, in case it's point (lon, lat)
+    * Dataset geometry columns, in case it's a point (lon, lat)
     */
-  final val datasetPoint: Param[String] = new Param[String](this, "datasetPoint", "dataset point columns")
+  final val datasetPoint: Param[String] = new Param[String](this, "datasetPoint", "external dataset point columns, e.g. `lon, lat`")
   setDefault(datasetPoint, "")
-  def setDatasetPoint(colnames: String) = set(datasetPoint, colnames)
+  def setDatasetPoint(colnames: String): this.type = set(datasetPoint, colnames)
 
   /**
-    * Dataset geometry columns, in case it's linear segments (lon1, lat1, lon2, lat2)
+    * Input DS column name with geometry WKT
     */
-  final val datasetSegment: Param[String] = new Param[String](this, "datasetSegment", "dataset segment columns")
-  setDefault(datasetSegment, "")
-  def setDatasetSegment(colnames: String) = set(datasetSegment, colnames)
+  final val inputWKT = new Param[String](this, "inputWKT", "input ds geometry column name")
+  setDefault(inputWKT, "")
+  def setInputWKT(value: String): this.type = set(inputWKT, value)
 
   /**
-    * Input ds column name with geometry WKT
+    * Input DS point geometry columns: "lon, lat"
     */
-  final val inputWkt = new Param[String](this, "inputWkt", "input ds geometry wkt column name")
-  setDefault(inputWkt, "")
+  final val inputPoint: Param[String] = new Param[String](this, "inputPoint", "input point columns, e.g. `lon, lat`")
+  setDefault(inputPoint, "")
+  def setInputPoint(colnames: String): this.type = set(inputPoint, colnames)
 
-  def setInputWkt(value: String) = set(inputWkt, value)
-
-  /**
-    * Input ds column names: "lon, lat"
-    */
-  final val lon: Param[String] = new Param[String](this, "lon", "locations lon column name")
-  final val lat: Param[String] = new Param[String](this, "lat", "locations lat column name")
-  setDefault(lon, "")
-  setDefault(lat, "")
-
-  def setInputLon(value: String) = set(lon, value)
-
-  def setInputLat(value: String) = set(lat, value)
-
-  /**
-    * input ds column names: "loc_id, fulldate"
-    */
-  final val inputKeys = new Param[String](this, "inputKeys", "input ds key columns, e.g. 'loc_id, request_date'")
-  setDefault(inputKeys, "")
-
-  def setInputKeys(value: String) = set(inputKeys, value)
-
-  final val numPartitions = new Param[String](this, "numPartitions", "dataset repartition parameter, no repartition if empty")
+  final val numPartitions = new Param[String](this, "numPartitions", "external dataset repartition parameter, no repartition if empty")
   setDefault(numPartitions, "")
+  def setNumPartitions(value: String): this.type = set(numPartitions, value)
 
-  def setNumPartitions(value: String) = set(numPartitions, value)
+  // transformer
 
   override def copy(extra: ParamMap): Transformer = defaultCopy(extra)
 
   /**
-    * You should call it before starting heavy and long transform
+    * You should call it to check schema before starting heavy and long transform
     * @param schema input schema
     * @return output schema
     */
