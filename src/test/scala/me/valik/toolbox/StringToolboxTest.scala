@@ -5,13 +5,22 @@ import org.scalatest._
 // happy path
 class StringToolboxTest extends FlatSpec with Matchers {
   // testOnly me.valik.toolbox.StringToolboxTest
-
-  //  splitTrim
-  //  toList
-  //  toMap
   import me.valik.toolbox.StringToolbox._
+  // custom separators
+  implicit val sep = Separators(";", Some(Separators("=")))
 
-  ???
+  it should "split string to array of non-empty trimmed strings" in {
+    assert("foo; bar; baz; bara bas".splitTrim === Array("foo", "bar", "baz", "bara bas"))
+  }
+
+  it should "split string to list of non-empty trimmed strings" in {
+    assert("foo; bar; baz; bara bas".s2list === Seq("foo", "bar", "baz", "bara bas"))
+  }
+
+  it should "parse string to Map[String, String]" in {
+    assert("foo = bar; baz = bara bas".parseMap === Map("foo" -> "bar", "baz" -> "bara bas"))
+  }
+
 }
 
 // corner cases
@@ -22,32 +31,45 @@ class StringToolboxTestSplitTrim extends FlatSpec with Matchers {
 
   // testOnly me.valik.toolbox.StringToolboxTestSplitTrim -- -z "empty"
   it should "produce empty array" in {
-    val empty = Array.empty[String]
+    val expected = Array.empty[String]
 
-    assert("".splitTrim === empty)
-    assert(",,,,,,, ,,,, , , , ".splitTrim === empty)
-    assert(" , \t , \n \n \t ".splitTrim === empty)
+    assert("".splitTrim === expected)
+    assert(",,,,,,, ,,,, , , , ".splitTrim === expected)
+    assert(" , \t , \n \n \t ".splitTrim === expected)
   }
 
   it should "produce size 1 array" in {
     assert(".".splitTrim === Array("."))
     assert(" \t \n . \n \t ".splitTrim === Array("."))
-    assert("foo,".splitTrim === Array("foo"))
-    assert(",foo,".splitTrim === Array("foo"))
-    assert("  foo  ,  ".splitTrim === Array("foo"))
-    assert(" , foo ".splitTrim === Array("foo"))
-    assert(" , foo , ".splitTrim === Array("foo"))
-    assert(" ,,, foo ,, ".splitTrim === Array("foo"))
+
+    val expected = Array("foo")
+    val data =
+      """
+        |foo,
+        |,foo,
+        |  foo  ,
+        | , foo
+        |  , foo ,
+        | ,,, foo ,,
+      """.stripMargin
+
+    for (line <- data.split('\n') if line.trim.length > 0) {
+      //println(s"check line: `$line`")
+      assert(line.splitTrim === expected)
+      assert(s" $line ".splitTrim === expected)
+      assert(s" , \t \n $line \t , \n ".splitTrim === expected)
+    }
   }
 
   it should "process complex text" in {
     val text =
       """
-        | The Mary,
+        | Mary,
         | had a little,
-lamb.
+        | lamb,
+        | ,.
       """.stripMargin
-    assert(text.splitTrim === Array("The Mary", "had a little", "lamb."))
+    assert(text.splitTrim === Array("Mary", "had a little", "lamb", "."))
   }
 }
 
@@ -59,39 +81,93 @@ class StringToolboxTestToList extends FlatSpec with Matchers {
   it should "produce empty list" in {
     val empty = Seq.empty[String]
 
-    assert("".list === empty)
-    assert(",,,,,,, ,,,, , , , ".list === empty)
-    assert(" , \t , \n \n \t ".list === empty)
+    assert("".s2list === empty)
+    assert(",,,,,,, ,,,, , , , ".s2list === empty)
+    assert(" , \t , \n \n \t ".s2list === empty)
   }
 
   it should "produce size 1 list" in {
-    assert(".".list === Seq("."))
-    assert(" \t \n . \n \t ".list === Seq("."))
-    assert("foo,".list === Seq("foo"))
-    assert(",foo,".list === Seq("foo"))
-    assert("  foo  ,  ".list === Seq("foo"))
-    assert(" , foo ".list === Seq("foo"))
-    assert(" , foo , ".list === Seq("foo"))
-    assert(" ,,, foo ,, ".list === Seq("foo"))
+    assert(".".s2list === Seq("."))
+    assert(" \t \n . \n \t ".s2list === Seq("."))
+
+    val expected = Seq("foo")
+    val data =
+      """
+        |foo,
+        |,foo,
+        |  foo  ,
+        | , foo
+        |  , foo ,
+        | ,,, foo ,,
+      """.stripMargin
+
+    for (line <- data.split('\n') if line.trim.length > 0) {
+      //println(s"check line: `$line`")
+      assert(line.s2list === expected)
+      assert(s" $line ".s2list === expected)
+      assert(s" , \t \n $line \t , \n ".s2list === expected)
+    }
   }
 
   it should "process complex text" in {
     val text =
       """
-        | The Mary,
+        | Mary,
         | had a little,
-lamb.
+        | lamb,
+        | .
       """.stripMargin
-    assert(text.list === Seq("The Mary", "had a little", "lamb."))
+    assert(text.s2list === Seq("Mary", "had a little", "lamb", "."))
   }
 }
 
-
 class StringToolboxTestToMap extends FlatSpec with Matchers {
-
   import me.valik.toolbox.StringToolbox.RichString
   import me.valik.toolbox.StringToolbox.DefaultSeparators.commaColon
 
   // testOnly me.valik.toolbox.StringToolboxTestToMap -- -z "empty"
-  ???
+  it should "produce empty map" in {
+    val expected = Map.empty[String, String]
+    val data =
+      """
+        |:                  , empty key or value
+        |:,:,:,:, ...
+        |foo
+        |foo, bar
+        |foo ,, , , ,, bar
+        |foo : bar : baz    , too many parts -- only two make a kv pair
+        |foo:bar:baz, noval , too many parts and no value for key
+      """.stripMargin
+
+    for (line <- data.split('\n')) {
+      //println(s"check line: `$line`")
+      assert(line.parseMap === expected)
+      assert(s" $line ".parseMap === expected)
+      assert(s" \t \n $line \t \n ".parseMap === expected)
+    }
+  }
+
+  it should "produce size 1 map" in {
+    val expected = Map("foo" -> "bar")
+    val data =
+      """
+        |foo:bar
+        |foo : bar
+        |foo: bar, baz              , no value for 'baz'
+        |bar: baz: foo, foo: bar    , too many parts in 'bar...'
+        |foo:bar, baz, nay,,, : , : , no values and no keys after firs pair
+      """.stripMargin
+
+    for (line <- data.split('\n') if line.trim.length > 0) {
+      //println(s"check line: `$line`")
+      assert(line.parseMap === expected)
+      assert(s" $line ".parseMap === expected)
+      assert(s" \t \n $line \t \n ".parseMap === expected)
+    }
+  }
+
+  it should "save last version of key value" in {
+    assert("foo: bar, foo: baz".parseMap === Map("foo" -> "baz"))
+  }
+
 }

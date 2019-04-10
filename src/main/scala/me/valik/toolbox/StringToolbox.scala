@@ -24,17 +24,16 @@ object StringToolbox {
       * @param sep split marker
       * @return empty Seq or Seq of trimmed strings
       */
-    def list(implicit sep: Separators): Seq[String] =
+    def s2list(implicit sep: Separators): Seq[String] =
       src.split(sep.v).map(_.trim).filter(_.nonEmpty)
 
     /**
       * Create Map from string, e.g. "foo: bar; poo: bazz"
       */
-    def toMap(implicit sep: Separators): Map[String, String] = {
+    def parseMap(implicit sep: Separators): Map[String, String] = {
       val kvsep = sep.next.getOrElse(Separators(":"))
       val res = for {
-        kv <- src.splitTrim(sep)
-        Array(k, v) = kv.splitTrim(kvsep)
+        Array(k, v) <- src.splitTrim(sep).map(_.splitTrim(kvsep))
       } yield k -> v
 
       res.toMap
