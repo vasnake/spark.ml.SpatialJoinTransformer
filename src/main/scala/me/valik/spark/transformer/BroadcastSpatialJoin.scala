@@ -114,10 +114,10 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
   // config
 
-  private lazy val config: TransformerConfig = getConfig
+  private lazy val config: TransformerConfig = ??? // getConfig
 
   import me.valik.toolbox.StringToolbox.{RichString, DefaultSeparators}
-  import DefaultSeparators.oneSeparator
+  import DefaultSeparators.commaColon
 
   private def checkConfig(): Unit = {
     val datasetNonEmptyGeometries = Seq(
@@ -134,65 +134,67 @@ class BroadcastSpatialJoin(override val uid: String) extends
     // TODO: check other parameters
   }
 
-  private def getConfig: TransformerConfig = {
-    checkConfig()
+  //private def getConfig: TransformerConfig = {
+  //  checkConfig()
+  //
+  //  val dataCols: Seq[String] = $(dataColumns).splitTrim
+  //
+  //  val dataColAliases: Seq[String] = {
+  //    val dca = $(dataColumnAliases).splitTrim
+  //    dataCols.zipWithIndex.map { case (name, idx) =>
+  //      dca.applyOrElse(idx, _ => name)
+  //    }
+  //  }
+  //
+  //  val df: DataFrame = loadDataset($(dataset))
+  //  val filterCols: Seq[String] = extraConditionCols($(condition), df)
+  //
+  //  val ds = {
+  //    val fltr = $(filter).trim
+  //    val cols = (dataCols ++
+  //      Seq($(datasetWkt), $(dsetlon), $(dsetlat)) ++
+  //      $(datasetSegment).splitTrim ++
+  //      $(datasetPoint).splitTrim ++
+  //      filterCols
+  //      ).filterNot(_.isEmpty).toSet.toList
+  //
+  //    val filtered = if (!fltr.isEmpty) df.filter(fltr) else df
+  //    val projected = filtered.select(cols.head, cols.tail: _*)
+  //    Try {
+  //      projected.repartition($(numPartitions).trim.toInt)
+  //    }.getOrElse(projected)
+  //  }
+  //
+  //  val pointCols = {
+  //    if ($(datasetPoint).splitTrim.size != 2) $(dsetlon) + "," + $(dsetlat)
+  //    else $(datasetPoint)
+  //  }
+  //
+  //  SpatialJoinTransformerConfig(
+  //    SpatialJoinTransformerDatasetConfig(
+  //      datasetName,
+  //      ds,
+  //      $(datasetWkt),
+  //      PointColumns(pointCols),
+  //      SegmentColumns($(datasetSegment)),
+  //      dataCols),
+  //    SpatialJoinTransformerInputConfig(
+  //      $(inputWkt), $(lon), $(lat),
+  //      $(inputKeys).splitTrim),
+  //    dataColsAlias,
+  //    $(distColAlias),
+  //    $(clockwiseColAlias),
+  //    $(predicate),
+  //    $(condition),
+  //    $(aggstatement),
+  //    $(broadcastSrc) == input,
+  //    parsedInputDateColumn,
+  //    $(intervalStartOffset),
+  //    $(intervalEndOffset)
+  //  )
+  //}
 
-    val dataCols: Seq[String] = $(dataColumns).splitTrim
-
-    val dataColAliases: Seq[String] = {
-      val dca = $(dataColumnAliases).splitTrim
-      dataCols.zipWithIndex.map { case (name, idx) =>
-        dca.applyOrElse(idx, _ => name)
-      }
-    }
-
-    val df = loadDataset(datasetName)
-    val filterCols: Seq[String] = extraConditionCols($(condition), df)
-
-    val ds = {
-      val fltr = $(filter).trim
-      val cols = (dataCols ++
-        Seq($(datasetWkt), $(dsetlon), $(dsetlat)) ++
-        $(datasetSegment).splitTrim ++
-        $(datasetPoint).splitTrim ++
-        filterCols
-        ).filterNot(_.isEmpty).toSet.toList
-
-      val filtered = if (!fltr.isEmpty) df.filter(fltr) else df
-      val projected = filtered.select(cols.head, cols.tail: _*)
-      Try {
-        projected.repartition($(numPartitions).trim.toInt)
-      }.getOrElse(projected)
-    }
-
-    val pointCols = {
-      if ($(datasetPoint).splitTrim.size != 2) $(dsetlon) + "," + $(dsetlat)
-      else $(datasetPoint)
-    }
-
-    SpatialJoinTransformerConfig(
-      SpatialJoinTransformerDatasetConfig(
-        datasetName,
-        ds,
-        $(datasetWkt),
-        PointColumns(pointCols),
-        SegmentColumns($(datasetSegment)),
-        dataCols),
-      SpatialJoinTransformerInputConfig(
-        $(inputWkt), $(lon), $(lat),
-        $(inputKeys).splitTrim),
-      dataColsAlias,
-      $(distColAlias),
-      $(clockwiseColAlias),
-      $(predicate),
-      $(condition),
-      $(aggstatement),
-      $(broadcastSrc) == input,
-      parsedInputDateColumn,
-      $(intervalStartOffset),
-      $(intervalEndOffset)
-    )
-  }
+  protected def loadDataset(name: String): DataFrame = ???
 
   // transformer
 
