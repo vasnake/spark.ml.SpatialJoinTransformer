@@ -114,12 +114,21 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
   // config
 
-  private lazy val config: TransformerConfig = ??? // getConfig
+  @transient private var config: Option[TransformerConfig] = None
+
+  protected def getConfig(spark: SparkSession): TransformerConfig = {
+    config.getOrElse({
+      config = Some(makeConfig(spark))
+      config.get
+    })
+  }
+
+  protected def loadDataset(name: String, spark: SparkSession): DataFrame = ???
 
   import me.valik.toolbox.StringToolbox.{RichString, DefaultSeparators}
   import DefaultSeparators.commaColon
 
-  private def checkConfig(): Unit = {
+  private def checkParams(): Unit = {
     val datasetNonEmptyGeometries = Seq(
       $(datasetPoint).nonEmpty,
       $(datasetWKT).nonEmpty
@@ -134,67 +143,57 @@ class BroadcastSpatialJoin(override val uid: String) extends
     // TODO: check other parameters
   }
 
-  //private def getConfig: TransformerConfig = {
-  //  checkConfig()
-  //
-  //  val dataCols: Seq[String] = $(dataColumns).splitTrim
-  //
-  //  val dataColAliases: Seq[String] = {
-  //    val dca = $(dataColumnAliases).splitTrim
-  //    dataCols.zipWithIndex.map { case (name, idx) =>
-  //      dca.applyOrElse(idx, _ => name)
-  //    }
-  //  }
-  //
-  //  val df: DataFrame = loadDataset($(dataset))
-  //  val filterCols: Seq[String] = extraConditionCols($(condition), df)
-  //
-  //  val ds = {
-  //    val fltr = $(filter).trim
-  //    val cols = (dataCols ++
-  //      Seq($(datasetWkt), $(dsetlon), $(dsetlat)) ++
-  //      $(datasetSegment).splitTrim ++
-  //      $(datasetPoint).splitTrim ++
-  //      filterCols
-  //      ).filterNot(_.isEmpty).toSet.toList
-  //
-  //    val filtered = if (!fltr.isEmpty) df.filter(fltr) else df
-  //    val projected = filtered.select(cols.head, cols.tail: _*)
-  //    Try {
-  //      projected.repartition($(numPartitions).trim.toInt)
-  //    }.getOrElse(projected)
-  //  }
-  //
-  //  val pointCols = {
-  //    if ($(datasetPoint).splitTrim.size != 2) $(dsetlon) + "," + $(dsetlat)
-  //    else $(datasetPoint)
-  //  }
-  //
-  //  SpatialJoinTransformerConfig(
-  //    SpatialJoinTransformerDatasetConfig(
-  //      datasetName,
-  //      ds,
-  //      $(datasetWkt),
-  //      PointColumns(pointCols),
-  //      SegmentColumns($(datasetSegment)),
-  //      dataCols),
-  //    SpatialJoinTransformerInputConfig(
-  //      $(inputWkt), $(lon), $(lat),
-  //      $(inputKeys).splitTrim),
-  //    dataColsAlias,
-  //    $(distColAlias),
-  //    $(clockwiseColAlias),
-  //    $(predicate),
-  //    $(condition),
-  //    $(aggstatement),
-  //    $(broadcastSrc) == input,
-  //    parsedInputDateColumn,
-  //    $(intervalStartOffset),
-  //    $(intervalEndOffset)
-  //  )
-  //}
+  private def makeConfig(spark: SparkSession): TransformerConfig = {
+    checkParams()
 
-  protected def loadDataset(name: String): DataFrame = ???
+    def parsePointColumns(str: String) = Try {
+      val Array(lon, lat) = str.splitTrim
+      PointColumns(lon, lat)
+    }.getOrElse(PointColumns("", ""))
+
+    val dataCols: Seq[String] = $(dataColumns).splitTrim
+
+    val ds = {
+      val dataConditionCols: Seq[String] = extraConditionColumns($(condition))
+      val cols = (dataCols ++
+        Seq($(datasetWKT)) ++
+        $(datasetPoint).splitTrim ++
+        dataConditionCols
+        ).filter(_.nonEmpty).toSet.toList
+
+      val df: DataFrame = loadDataset($(dataset), spark)
+      val fltr = $(filter).trim
+      val filtered = if (fltr.nonEmpty) df.filter(fltr) else df
+
+      val projected = filtered.select(cols.head, cols.tail: _*)
+      Try {
+        projected.repartition($(numPartitions).trim.toInt)
+      }.getOrElse(projected)
+    }
+
+    val dataColAliases: Seq[String] = {
+      val dca = $(dataColumnAliases).splitTrim
+      dataCols.zipWithIndex.map { case (name, idx) =>
+        dca.applyOrElse(idx, _ => name)
+      } }
+
+    TransformerConfig(
+      ExternalDatasetConfig(
+        $(dataset),
+        ds,
+        $(datasetWKT),
+        parsePointColumns($(datasetPoint)),
+        dataCols,
+        dataColAliases),
+      InputDatasetConfig(
+        $(inputWKT),
+        parsePointColumns($(inputPoint))),
+      $(distanceColumnAlias),
+      $(predicate),
+      $(condition),
+      $(broadcast) == input
+    )
+  }
 
   // transformer
 
@@ -218,6 +217,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
     val spark = input.sparkSession
     import spark.implicits._
 
+    val conf = getConfig(spark)
     ???
   }
 
@@ -235,6 +235,54 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     * spatial op, one of: within, contains, intersects, overlaps, nearest
     */
   val nearest = "nearest"
+
+  type ExtraConditionFunc = (Row, Row) => Boolean
+
+  /**
+    * Produce filter function to push down to spatial join.
+    * Join direction (broadcast input or external dataset) must be set
+    * accordingly to the predicate.
+    *
+    * @param predicate predefined string, one of:
+    *                  {{{
+    right.fulldate_ts between left.start_ts and left.end_ts
+                       }}}
+    * @return function that will be called for each row in left dataset for each
+    *         candidate-to-join row from the right dataset
+    */
+  def extraConditionFunc(predicate: String): Option[ExtraConditionFunc] = {
+    parseExtraCondition(predicate).map(_.func)
+  }
+
+  /**
+    * Get external dataset column names used in extra-condition filter,
+    * see {@link extraConditionFunc}
+    *
+    * @param predicate predefined string
+    * @return list of column names
+    */
+  def extraConditionColumns(predicate: String): Seq[String] = {
+    parseExtraCondition(predicate).map(_.columns).getOrElse(Seq.empty)
+  }
+
+  protected def parseExtraCondition(predicate: String): Option[ExtraCondition] = {
+    // TODO: parse sql-like statement and produce function dynamically
+    predicate.toLowerCase match {
+      case "right.fulldate_ts between left.start_ts and left.end_ts" => Some(
+        ExtraCondition(
+          columns = Seq("start_ts", "end_ts"),
+          func = (left, right) => {
+            val ut = right.getAs[Int]("fulldate_ts")
+            val bts = left.getAs[Long]("start_ts")
+            val ets = left.getAs[Long]("end_ts")
+            bts <= ut && ut <= ets
+          }) )
+      case "" => None
+      case x => throw new IllegalArgumentException(s"Spatial join transformer error: unknown extra condition `$x`")
+    }
+  }
+
+  case class ExtraCondition(columns: Seq[String], func: ExtraConditionFunc)
 
   case class TransformerConfig(
     datasetCfg: ExternalDatasetConfig,
@@ -254,8 +302,6 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
   case class ExternalDatasetConfig(
     name: String,
     df: DataFrame,
-    numPartitions: Int,
-    filter: String,
     wktColumn: String,
     pointColumns: PointColumns,
     dataColumns: Seq[String],
