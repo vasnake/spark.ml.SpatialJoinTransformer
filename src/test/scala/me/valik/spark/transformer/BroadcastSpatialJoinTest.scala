@@ -16,7 +16,7 @@ class BroadcastSpatialJoinTest extends
     val input = Seq(("1", "2019-04-05", "37.6095", "55.9297")).toDF("id", "date", "lon", "lat")
     val expected = Seq(("1", "foo"), ("2", "bar")).toDF("id", "data")
 
-    val transformer = new BroadcastSpatialJoin()
+    val transformer = new BroadcastSpatialJoin().setDatasetPoint("lon, lat")
     val output = transformer.transform(input)
 
     //output.show(3, truncate=false)
@@ -34,7 +34,7 @@ class ContainmentJoinDataFrameTest extends
     val input = Seq(("1", "2019-04-05", "37.6095", "55.9297")).toDF("id", "date", "lon", "lat")
     val expected = Seq(("1", "foo"), ("2", "bar")).toDF("id", "data")
 
-    val res = new BroadcastSpatialJoin().transform(input)
+    val res = new BroadcastSpatialJoin().setDatasetPoint("lon, lat").transform(input)
     // res.show(3, truncate=false)
     res.collect should contain theSameElementsAs Seq(
       Row("1", "foo"),

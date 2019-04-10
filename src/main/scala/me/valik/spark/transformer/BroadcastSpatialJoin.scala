@@ -174,7 +174,8 @@ class BroadcastSpatialJoin(override val uid: String) extends
     val dataColAliases: Seq[String] = {
       val dca = $(dataColumnAliases).splitTrim
       dataCols.zipWithIndex.map { case (name, idx) =>
-        dca.applyOrElse(idx, _ => name)
+        // find alias by index or use name as alias
+        dca.applyOrElse(idx, (_: Int) => name)
       } }
 
     TransformerConfig(
