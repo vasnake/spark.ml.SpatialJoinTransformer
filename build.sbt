@@ -25,6 +25,11 @@ val testDeps = Seq(
    "com.holdenkarau" %% "spark-testing-base" % "2.4.0_0.11.0"
 )
 
+val spatialDeps = Seq(
+  // https://github.com/locationtech/jts
+  "org.locationtech.jts" % "jts-core" % "1.16.1"
+)
+
 val buildSettings = Seq(
   organization := Organization,
   name := Name,
@@ -60,6 +65,7 @@ concurrentRestrictions in Scope.Global += Tags.limit(Tags.Test, 1)
 lazy val root = (project in file(".")).settings(
   buildSettings ++ Seq(
     libraryDependencies ++= sparkDeps.map(_ % Provided)
+      ++ spatialDeps
       ++ testDeps.map(_ % Test)
   )
 

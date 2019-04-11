@@ -29,6 +29,13 @@ import scala.util.Try
   * By default `input` will be broadcasted and `external` will be iterated using flatMap to find
   * all the records from `input` that satisfy spatial relation (with `filter` and `condition`)
   * <br/><br/>
+  * `left` or `right` dataset: the join process looks like we iterate (flatMap) over `left`
+  * dataset and, for each left.row we search for rows in `right` dataset that satisfy
+  * some conditions (spatial and extra).
+  * In this scenario we need to broadcast the `right` dataset, hence it should be small enough.
+  * As you can see, `broadcast` parameter defines which of two datasets will be `right`
+  * and then another will be `left`.
+  * <br/><br/>
   * `geometry`: spatial data defined as column containing WKT-formatted primitives: points, polylines, polygons;
   * WGS84 coordinate system expected (lon,lat decimal degrees GPS coordinates).
   * Points can be represented as two columns: (lon, lat).
@@ -123,7 +130,9 @@ class BroadcastSpatialJoin(override val uid: String) extends
     })
   }
 
-  protected def loadDataset(name: String, spark: SparkSession): DataFrame = ???
+  protected def loadDataset(name: String, spark: SparkSession): DataFrame = {
+    spark sql s"select * from $name"
+  }
 
   import me.valik.toolbox.StringToolbox.{RichString, DefaultSeparators}
   import DefaultSeparators.commaColon
@@ -153,12 +162,12 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
     val dataCols: Seq[String] = $(dataColumns).splitTrim
 
-    val ds = {
-      val dataConditionCols: Seq[String] = extraConditionColumns($(condition))
+    val ds = { // external dataset, filtered and projected
+      val conditionCols: Seq[String] = extraConditionColumns($(condition))
       val cols = (dataCols ++
         Seq($(datasetWKT)) ++
         $(datasetPoint).splitTrim ++
-        dataConditionCols
+        conditionCols
         ).filter(_.nonEmpty).toSet.toList
 
       val df: DataFrame = loadDataset($(dataset), spark)
@@ -180,19 +189,19 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
     TransformerConfig(
       ExternalDatasetConfig(
-        $(dataset),
-        ds,
-        $(datasetWKT),
+        name = $(dataset),
+        df = ds,
+        wktColumn = $(datasetWKT),
         parsePointColumns($(datasetPoint)),
         dataCols,
         dataColAliases),
       InputDatasetConfig(
-        $(inputWKT),
+        wktColumn = $(inputWKT),
         parsePointColumns($(inputPoint))),
       $(distanceColumnAlias),
-      $(predicate),
-      $(condition),
-      $(broadcast) == input
+      spatialPredicate = $(predicate),
+      extraPredicate = $(condition),
+      broadcastInput = $(broadcast) == input
     )
   }
 
@@ -214,12 +223,9 @@ class BroadcastSpatialJoin(override val uid: String) extends
     transform(emptyInput).schema
   }
 
-  override def transform(input: Dataset[_]): DataFrame = {
-    val spark = input.sparkSession
-    import spark.implicits._
-
-    val conf = getConfig(spark)
-    ???
+  override def transform(inputDS: Dataset[_]): DataFrame = {
+    val spark = inputDS.sparkSession
+    spatialJoin(inputDS.toDF, getConfig(spark), spark)
   }
 
 }
@@ -237,7 +243,38 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     */
   val nearest = "nearest"
 
+  /**
+    * earth model id
+    */
+  val WGS84 = 4326
+
   type ExtraConditionFunc = (Row, Row) => Boolean
+
+  def spatialJoin(inputDF: DataFrame, config: TransformerConfig, spark: SparkSession): DataFrame = {
+
+    import org.locationtech.jts.geom._
+    //import org.locationtech.jts.io._
+    val gf = new GeometryFactory(new PrecisionModel(PrecisionModel.FLOATING), WGS84)
+
+    //val inputGeomSpec = {
+    //  if (config.inputCfg.isWkt) DatasetGeometryWkt(gf, config.inputCfg.inputWkt)
+    //  else DatasetGeometryPoint(gf, config.inputCfg.inputLon, config.inputCfg.inputLat)
+    //}
+    //
+    //val dsetGeomSpec = {
+    //  if (config.datasetCfg.isWkt) DatasetGeometryWkt(gf, config.datasetCfg.wktColumn)
+    //  else if (config.datasetCfg.isSegment) {
+    //    val s = config.datasetCfg.segmentColumns
+    //    DatasetGeometrySegment(gf, s.p1.lon, s.p1.lat, s.p2.lon, s.p2.lat)
+    //  }
+    //  else {
+    //    val p = config.datasetCfg.pointColumns
+    //    DatasetGeometryPoint(gf, p.lon, p.lat)
+    //  }
+    //}
+
+    ???
+  }
 
   /**
     * Produce filter function to push down to spatial join.
