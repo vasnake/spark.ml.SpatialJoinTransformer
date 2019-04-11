@@ -8,6 +8,8 @@ import org.locationtech.jts.io.WKTReader
 
 object DatasetGeometry {
 
+  // TODO: add unit tests
+
   /**
     * earth model id
     */

@@ -9,6 +9,7 @@ import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, I
 import org.locationtech.jts.geom.{Coordinate, Geometry, GeometryFactory}
 import org.locationtech.jts.io.WKTReader
 
+import scala.annotation.elidable
 import scala.util.Try
 
 /**
@@ -247,27 +248,145 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
   type ExtraConditionFunc = (Row, Row) => Boolean
 
-  def spatialJoin(inputDF: DataFrame, config: TransformerConfig, spark: SparkSession): DataFrame = {
-    import me.valik.spark.geometry.DatasetGeometry._
+  /**
+    * transformer debug tool
+    * @param df dataset to show `df.show(n, truncate)`
+    * @param txt message to print before dumping df
+    * @param n max number of rows to print
+    * @param truncate truncate long lines or not
+    */
+  @elidable(annotation.elidable.FINE)
+  def show(df: DataFrame, txt: String = "spatial-join-debug", n: Int = 7, truncate: Boolean = true): Unit = {
+    println(s"msg: `$txt`")
+    df.show(n, truncate)
+  }
 
+  def spatialJoin(inputDF: DataFrame, config: TransformerConfig, spark: SparkSession): DataFrame = {
+    //import spark.implicits._
     //import org.locationtech.jts.geom._
     //implicit val gm = {
     //  val gf = new GeometryFactory(new PrecisionModel(PrecisionModel.FLOATING), sridWGS84)
     //  GeometryMeta(gf, new WKTReader(gf))
     //}
 
-    def geomSpec(conf: DatasetConfig): DatasetGeometry = {
-      if (conf.isWKT) DatasetGeometryWKT(conf.wktColumn)
-      else {
-        val p = conf.pointColumns
-        DatasetGeometryPoint(p.lon, p.lat)
-      }
+    // geometry interface
+    val inputGeom = config.inputCfg.geomSpec
+    val dsetGeom = config.datasetCfg.geomSpec
+    // data to join
+    val needDistance = !config.distanceColumnAlias.isEmpty
+    val dataColNames = config.datasetCfg.dataColumns
+    // filter by distance needed?
+    val filterByDist = isWithinD(config.spatialPredicate)
+    val radius = extractRadius(config.spatialPredicate)._1.toInt // meters or 0
+
+
+    // from dataset we need (geometry, data, used-in-filter-cols)
+    val dataset = {
+      val dset = config.datasetCfg.dataset
+      val gcols = dsetGeom.colnames.toSet
+      val dcols: Set[String] = (dataColNames ++ extraConditionCols(config.extraPredicate, dset)).toSet -- gcols
+      val additionalDateCols =
+        if (datePruningConfig.isDefined) Seq(DATASET_DATE_COLUMN)
+        else Seq()
+      val cols = (dcols ++ additionalDateCols).toList.map(col) ++ dsetGeom.columns
+
+      dset.select(cols: _*)
     }
 
-    val inputGeomSpec = geomSpec(config.inputCfg)
-    val dsetGeomSpec = geomSpec(config.datasetCfg)
+    // from input we need (keys, geometry)
+    val input = inputDF.select(inputKeyColNames.map(col) ++ inputGeom.columns: _*)
+      .withDateIntervalColumns(datePruningConfig)
 
-    ???
+    // debug
+    show(dataset, s"dataset parts ${dataset.rdd.getNumPartitions}")
+    show(input, s"input parts ${input.rdd.getNumPartitions}")
+
+    // extra filter func
+    val condition = extraConditionFunc(config.extraPredicate, dataset)
+
+    // join postprocessing: distance, direction, precise filter-by-distance
+    def postprocess(dscols: Row, incols: Row, dsgeom: Geometry, ingeom: Geometry
+    ): Option[(Row, Row, Double, Boolean)] = {
+      lazy val (point, segment) = (Point(ingeom), Segment(dsgeom))
+
+      // calc distance if needed: meters between centroids
+      val distance = {
+        if (filterByDist || needDistance) {
+          if (isSegmentDataset) point2SegmentDistance(point, segment).toDouble
+          else geoDistance(dsgeom, ingeom).toDouble
+        }
+        else 0d
+      }
+
+      // calc CW/CCW direction if needed
+      def direction = {
+        if (needDirection) isSegmentClockwise(point, segment)
+        else false
+      }
+
+      // filter by distance if required
+      if (!filterByDist || distance <= radius) Some((dscols, incols, distance, direction))
+      else None
+    }
+
+    // do join
+    val crosstable = {
+      // (dataset keys, geom)
+      val ds = dataset.rdd.map { case row: Row => (row, dsetGeom.geometry(row)) }
+      // (input keys, geom)
+      val inp = input.rdd.map { case row: Row => (row, inputGeom.geometry(row)) }
+
+      // do spatial join, broadcasting dataset or input; compute distance, directions
+      spatialJoinWrapper(spark, ds, inp, config.predicate, condition, config.broadcastInput, datePruningConfig)
+        .flatMap { case (dscols, incols, dsgeom, ingeom) => postprocess(dscols, incols, dsgeom, ingeom) }
+    }
+
+    // columns added after spatial join
+    val distColName = "distance"
+    val directionColName = "clockwise"
+
+    // convert rdd to dataframe
+    val crosstabDf = {
+      val fields: Seq[StructField] = input.schema.fields.toSeq ++
+        dataset.schema.fields.toSeq :+
+        (if (needDistance) StructField(distColName, DataTypes.DoubleType) else null) :+
+        (if (needDirection) StructField(directionColName, DataTypes.BooleanType) else null)
+
+      val schema = StructType(fields.filter(_ != null))
+
+      val rdd = crosstable.map { case (dsrow, inprow, dist, dir) => {
+        Row.fromSeq(inprow.toSeq ++ dsrow.toSeq ++ Seq(dist, dir))
+      }}
+
+      spark.createDataFrame(rdd, schema)
+        .dropDateIntervalColumns(datePruningConfig)
+    }
+    show(crosstabDf, "crosstable")
+
+    // input left-outer-join data
+
+    if (config.aggStatement.isEmpty) {
+      // add 'data' and, optionally, distance
+      val dcols = dataColNames.zip(config.dataColAlias).map { case (name, alias) =>
+        col(s"link.$name") as alias
+      }
+      val distdir = (
+        if (needDistance) Seq(col(s"link.$distColName") as config.distColAlias)
+        else Seq.empty) ++ (
+        if (needDirection) Seq(col(s"link.$directionColName") as config.clockwiseAlias)
+        else Seq.empty)
+
+      inputDF.as("input").join(crosstabDf.as("link"), inputKeyColNames, "left_outer")
+        .select((Seq($"input.*") ++ dcols ++ distdir): _*)
+    }
+    else {
+      // add aggregation result, no 'data' or 'distance'
+      val folded = contextAggUtils.executeSql(crosstabDf, config.aggStatement, inputKeyColNames)
+      val addcols = folded.columns.filter(cn => !inputDF.columns.contains(cn))
+
+      inputDF.as("input").join(folded.as("link"), inputKeyColNames, "left_outer")
+        .select("input.*", addcols: _*)
+    }
   }
 
   /**
@@ -329,6 +448,13 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     def isWKT: Boolean = wktColumn.nonEmpty
     def wktColumn: String
     def pointColumns: PointColumns
+
+    import me.valik.spark.geometry.DatasetGeometry._
+
+    def geomSpec: DatasetGeometry = {
+      if (isWKT) DatasetGeometryWKT(wktColumn)
+      else DatasetGeometryPoint(pointColumns.lon, pointColumns.lat)
+    }
   }
 
   case class ExternalDatasetConfig(
