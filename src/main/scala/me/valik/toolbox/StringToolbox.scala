@@ -1,5 +1,7 @@
 package me.valik.toolbox
 
+import scala.util.Try
+
 object StringToolbox {
 
   case class Separators(v: String, next: Option[Separators] = None)
@@ -9,6 +11,10 @@ object StringToolbox {
   }
 
   implicit class RichString(val src: String) extends AnyVal {
+
+    def extractNumber(pos: Int, default: Double = 0d)(implicit  sep: Separators): Double = {
+      Try{ src.split(sep.v).lift(pos).fold(default)(_.toDouble) }.getOrElse(default)
+    }
 
     /**
       * Convert string to array of trimmed strings, empty items will be filter out.

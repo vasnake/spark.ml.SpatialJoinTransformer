@@ -248,27 +248,6 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
   type ExtraConditionFunc = (Row, Row) => Boolean
 
-  import spatialspark.operator.SpatialOperator
-
-  /**
-    * parse spatial operator name
-    *
-    * @param predicate one of: withindist, within, contains, intersects, overlaps
-    * @return NearestD by default
-    */
-  protected def spatialOperator(predicate: String): SpatialOperator.SpatialOperator =
-    predicate.toLowerCase match {
-      case p if p.contains("withindist") => SpatialOperator.WithinD
-      case p if p.contains("within") => SpatialOperator.Within
-      case p if p.contains("contains") => SpatialOperator.Contains
-      case p if p.contains("intersects") => SpatialOperator.Intersects
-      case p if p.contains("overlaps") => SpatialOperator.Overlaps
-      case _ => SpatialOperator.NearestD
-    }
-
-  def isNearest(op: String): Boolean = spatialOperator(op) == SpatialOperator.NearestD
-
-  def isWithinD(op: String): Boolean = spatialOperator(op) == SpatialOperator.WithinD
 
   /**
     * transformer debug tool
@@ -284,6 +263,7 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
   }
 
   def spatialJoin(inputDF: DataFrame, config: TransformerConfig, spark: SparkSession): DataFrame = {
+    import me.valik.spatial.SpatialJoin._
     //import spark.implicits._
     //import org.locationtech.jts.geom._
     //implicit val gm = {
@@ -299,8 +279,7 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     val dataColNames = config.datasetCfg.dataColumns
     // filter by distance needed?
     val filterByDist = isWithinD(config.spatialPredicate)
-    val radius = extractRadius(config.spatialPredicate)._1.toInt // meters or 0
-
+    val radius = extractRadius(config.spatialPredicate).meters.toInt // meters or 0
 
     // from dataset we need (geometry, data, used-in-filter-cols)
     val dataset = {
