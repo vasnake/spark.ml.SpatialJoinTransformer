@@ -248,6 +248,28 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
   type ExtraConditionFunc = (Row, Row) => Boolean
 
+  import spatialspark.operator.SpatialOperator
+
+  /**
+    * parse spatial operator name
+    *
+    * @param predicate one of: withindist, within, contains, intersects, overlaps
+    * @return NearestD by default
+    */
+  protected def spatialOperator(predicate: String): SpatialOperator.SpatialOperator =
+    predicate.toLowerCase match {
+      case p if p.contains("withindist") => SpatialOperator.WithinD
+      case p if p.contains("within") => SpatialOperator.Within
+      case p if p.contains("contains") => SpatialOperator.Contains
+      case p if p.contains("intersects") => SpatialOperator.Intersects
+      case p if p.contains("overlaps") => SpatialOperator.Overlaps
+      case _ => SpatialOperator.NearestD
+    }
+
+  def isNearest(op: String): Boolean = spatialOperator(op) == SpatialOperator.NearestD
+
+  def isWithinD(op: String): Boolean = spatialOperator(op) == SpatialOperator.WithinD
+
   /**
     * transformer debug tool
     * @param df dataset to show `df.show(n, truncate)`
