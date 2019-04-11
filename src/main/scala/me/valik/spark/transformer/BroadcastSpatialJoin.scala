@@ -2,10 +2,12 @@
 package me.valik.spark.transformer
 
 import org.apache.spark.ml.Transformer
-import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SparkSession}
+import org.apache.spark.sql.types.{DataTypes, StructType}
 import org.apache.spark.ml.param.{Param, ParamMap, Params}
 import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, Identifiable}
+import org.locationtech.jts.geom.{Coordinate, Geometry, GeometryFactory}
+import org.locationtech.jts.io.WKTReader
 
 import scala.util.Try
 
@@ -243,35 +245,27 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     */
   val nearest = "nearest"
 
-  /**
-    * earth model id
-    */
-  val WGS84 = 4326
-
   type ExtraConditionFunc = (Row, Row) => Boolean
 
   def spatialJoin(inputDF: DataFrame, config: TransformerConfig, spark: SparkSession): DataFrame = {
+    import me.valik.spark.geometry.DatasetGeometry._
 
-    import org.locationtech.jts.geom._
-    //import org.locationtech.jts.io._
-    val gf = new GeometryFactory(new PrecisionModel(PrecisionModel.FLOATING), WGS84)
+    //import org.locationtech.jts.geom._
+    //implicit val gm = {
+    //  val gf = new GeometryFactory(new PrecisionModel(PrecisionModel.FLOATING), sridWGS84)
+    //  GeometryMeta(gf, new WKTReader(gf))
+    //}
 
-    //val inputGeomSpec = {
-    //  if (config.inputCfg.isWkt) DatasetGeometryWkt(gf, config.inputCfg.inputWkt)
-    //  else DatasetGeometryPoint(gf, config.inputCfg.inputLon, config.inputCfg.inputLat)
-    //}
-    //
-    //val dsetGeomSpec = {
-    //  if (config.datasetCfg.isWkt) DatasetGeometryWkt(gf, config.datasetCfg.wktColumn)
-    //  else if (config.datasetCfg.isSegment) {
-    //    val s = config.datasetCfg.segmentColumns
-    //    DatasetGeometrySegment(gf, s.p1.lon, s.p1.lat, s.p2.lon, s.p2.lat)
-    //  }
-    //  else {
-    //    val p = config.datasetCfg.pointColumns
-    //    DatasetGeometryPoint(gf, p.lon, p.lat)
-    //  }
-    //}
+    def geomSpec(conf: DatasetConfig): DatasetGeometry = {
+      if (conf.isWKT) DatasetGeometryWKT(conf.wktColumn)
+      else {
+        val p = conf.pointColumns
+        DatasetGeometryPoint(p.lon, p.lat)
+      }
+    }
+
+    val inputGeomSpec = geomSpec(config.inputCfg)
+    val dsetGeomSpec = geomSpec(config.datasetCfg)
 
     ???
   }
@@ -331,7 +325,7 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     broadcastInput: Boolean
   )
 
-  abstract class DatasetConfig {
+  sealed trait DatasetConfig {
     def isWKT: Boolean = wktColumn.nonEmpty
     def wktColumn: String
     def pointColumns: PointColumns
