@@ -19,12 +19,14 @@ class BroadcastSpatialJoinTest extends
     import spark.implicits._
 
     val input = Seq(("1", "2019-04-05", "37.6095", "55.9297")).toDF("id", "date", "lon", "lat")
+    val data = Seq(("11", "37", "55"), ("12", "37.5", "55.5")).toDF("poi_id", "lon", "lat")
     val expected = Seq(("1", "foo"), ("2", "bar")).toDF("id", "data")
 
+    data.createOrReplaceTempView("poi")
     val transformer = makeTransformer
     val output = transformer.transform(input)
+    output.show(3, truncate=false)
 
-    //output.show(3, truncate=false)
     assertDataFrameEquals(output, expected)
   }
 }

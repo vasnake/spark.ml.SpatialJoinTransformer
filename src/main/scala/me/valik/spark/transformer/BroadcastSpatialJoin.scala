@@ -368,7 +368,7 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     * @param dataset   big dataset, `left`
     * @param input     small (to broadcast) dataset, `right`
     * @param predicate spatial relation, one of: within, contains, intersects, overlaps, nearest, etc;
-    *                  see {@link spatialOperator}.
+    *                  see {@see spatialOperator}.
     *                              `withindist` should be defined as `withindist meters` e.g. `withindist 10000`
     *                              for finding all right objects closer than 10km to left object.
     * @param condition  extra predicate for filtering rows before joining rigth to left
