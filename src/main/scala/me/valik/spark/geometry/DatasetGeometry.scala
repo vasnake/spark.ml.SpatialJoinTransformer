@@ -59,10 +59,17 @@ object DatasetGeometry {
   }
 
   case class DatasetGeometryPoint(lon: String, lat: String) extends DatasetGeometry {
+    private def getRowVal(row: Row, fn: String): Double = row.get(row.fieldIndex(fn)) match {
+      case a: Double => a
+      case b: String => b.toDouble
+      case c: Int => c.toDouble
+      case d => d.toString.toDouble
+    }
+
     override def geometry(rec: Row)(implicit gm: GeometryMeta): Geometry = {
       gm.gf.createPoint(
         // can be null?
-        new Coordinate(rec.getAs[Double](lon), rec.getAs[Double](lat))
+        new Coordinate(getRowVal(rec, lon), getRowVal(rec, lat))
       ).asInstanceOf[Geometry]
     }
 

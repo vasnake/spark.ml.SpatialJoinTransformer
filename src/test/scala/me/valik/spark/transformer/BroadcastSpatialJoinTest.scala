@@ -13,14 +13,16 @@ class BroadcastSpatialJoinTest extends
     new BroadcastSpatialJoin()
       .setDataset("poi")
       .setDatasetPoint("lon, lat")
+      .setInputPoint("lon, lat")
+        .setDataColumns("poi_id")
 
   // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "smoke"
   it should "pass smoke test" in {
     import spark.implicits._
 
-    val input = Seq(("1", "2019-04-05", "37.6095", "55.9297")).toDF("id", "date", "lon", "lat")
+    val input = Seq(("1", "37.6095", "55.9297")).toDF("id", "lon", "lat")
     val data = Seq(("11", "37", "55"), ("12", "37.5", "55.5")).toDF("poi_id", "lon", "lat")
-    val expected = Seq(("1", "foo"), ("2", "bar")).toDF("id", "data")
+    val expected = Seq(("1", "11")).toDF("id", "poi_id")
 
     data.createOrReplaceTempView("poi")
     val transformer = makeTransformer

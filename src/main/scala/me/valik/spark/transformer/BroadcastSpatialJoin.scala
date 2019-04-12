@@ -142,18 +142,20 @@ class BroadcastSpatialJoin(override val uid: String) extends
   import DefaultSeparators.commaColon
 
   private def checkParams(): Unit = {
-    val datasetNonEmptyGeometries = Seq(
-      $(datasetPoint).nonEmpty,
-      $(datasetWKT).nonEmpty
-    )
+    def checkGeomCols(wkt: String, point: String, name: String) = {
+      val nonEmptyGeometries = Seq(point.nonEmpty, wkt.nonEmpty)
+      require(nonEmptyGeometries.count(identity) == 1,
+        s"You must specify one and only one property of (${name}WKT, ${name}Point)")
+      require(point.isEmpty || point.splitTrim.length == 2,
+        s"${name}Point property should be empty or contain string like 'lon, lat'")
+    }
 
-    require(datasetNonEmptyGeometries.count(identity) == 1,
-      "You must specify one and only one property of (datasetWKT, datasetPoint)")
+    checkGeomCols($(datasetWKT).trim, $(datasetPoint).trim, "dataset")
+    checkGeomCols($(inputWKT).trim, $(inputPoint).trim, "input")
 
-    require($(datasetPoint).isEmpty || $(datasetPoint).splitTrim.length == 2,
-      "datasetPoint property should be empty or contain string like 'lon, lat'")
-
-    // TODO: check other parameters
+    require($(dataset).trim.nonEmpty, "dataset property must contain table or view name")
+    require($(dataColumns).splitTrim.length > 0,
+      "dataColumns property must contain at least one column name")
   }
 
   private def makeConfig(spark: SparkSession): TransformerConfig = {
