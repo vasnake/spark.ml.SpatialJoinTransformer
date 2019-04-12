@@ -12,8 +12,14 @@ object StringToolbox {
 
   implicit class RichString(val src: String) extends AnyVal {
 
-    def extractNumber(pos: Int, default: Double = 0d)(implicit  sep: Separators): Double = {
-      Try{ src.split(sep.v).lift(pos).fold(default)(_.toDouble) }.getOrElse(default)
+    /**
+      * Split string by separator, take item in `pos` position and convert it to double
+      * @param pos zero-based item position in the string
+      * @param sep splitting marker
+      * @return a parsed number or None
+      */
+    def extractNumber(pos: Int)(implicit  sep: Separators): Option[Double] = {
+      Try { src.splitTrim(sep)(pos).toDouble }.toOption
     }
 
     /**

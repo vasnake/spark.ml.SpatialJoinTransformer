@@ -275,11 +275,11 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     val inputGeom = config.inputCfg.geomSpec
     val dsetGeom = config.datasetCfg.geomSpec
     // data to join
-    val needDistance = !config.distanceColumnAlias.isEmpty
+    val needDistance = config.distanceColumnAlias.nonEmpty
     val dataColNames = config.datasetCfg.dataColumns
     // filter by distance needed?
     val filterByDist = isWithinD(config.spatialPredicate)
-    val radius = extractRadius(config.spatialPredicate).meters.toInt // meters or 0
+    val radius = extractRadius(config.spatialPredicate).meters.toInt // n meters or 0
 
     // from dataset we need (geometry, data, used-in-filter-cols)
     val dataset = {

@@ -171,3 +171,32 @@ class StringToolboxTestToMap extends FlatSpec with Matchers {
   }
 
 }
+
+class StringToolboxTestExtractNumber extends FlatSpec with Matchers {
+  import me.valik.toolbox.StringToolbox._
+  implicit val sep = Separators(" ")
+
+  // testOnly me.valik.toolbox.StringToolboxTestExtractNumber -- -z "parse number"
+  it should "parse number from a string" in {
+    val data =
+      """
+        |0: 3.33
+        |0: 3.33 foo
+        |1: foo 3.33
+        |1: foo 3.33 bar
+        |2: foo bar 3.33
+        |2: foo bar 3.33 baz
+      """.stripMargin.split("\n").map(_.trim).filter(_.nonEmpty)
+
+    for (line <- data; Array(pos, inp) = line.splitTrim(Separators(": "))) {
+      assert(inp.extractNumber(pos.toInt) === Some(3.33))
+      assert(s"  $inp  ".extractNumber(pos.toInt) === Some(3.33))
+      assert(s" oops $inp ".extractNumber(pos.toInt) === None)
+    }
+
+    assert("".extractNumber(0) === None)
+    assert(" foo ".extractNumber(0) === None)
+    assert(" foo bar ".extractNumber(1) === None)
+    assert(" 1 2 3 ".extractNumber(3) === None)
+  }
+}

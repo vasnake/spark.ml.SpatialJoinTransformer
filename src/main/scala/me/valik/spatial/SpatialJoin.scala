@@ -24,8 +24,6 @@ object SpatialJoin {
 
   def isWithinD(op: String): Boolean = spatialOperator(op) == SpatialOperator.WithinD
 
-  case class Distance(meters: Double, degrees: Double)
-
   /**
     * Extract distance aka radius from ops like "withindist 10000";
     * roughly convert meters to decimal degrees.
@@ -41,9 +39,10 @@ object SpatialJoin {
     // try to convert to int the number after space symbol; 0 by default
     import me.valik.toolbox.StringToolbox._
     implicit val sep = Separators(" ")
-    val radiusM = op.extractNumber(pos = 1, default = 0d)
+    val radiusM = op.extractNumber(1).getOrElse(0)
 
     Distance(radiusM, radiusM / metersInDeg)
   }
 
+  case class Distance(meters: Double, degrees: Double)
 }
