@@ -40,7 +40,6 @@ object DatasetGeometry {
     * @return df.rdd.mapPartition ... (row, geometry)
     */
   def addGeometryToRDD(df: DataFrame, geomSpec: DatasetGeometry): RDD[(Row, Geometry)] = {
-    import me.valik.spark.geometry.DatasetGeometry._
     // preservesPartitioning = true ? may be, if you can explain why it's important here
     df.rdd.mapPartitions(it => {
       implicit val gm = GeometryMeta(sridWGS84)

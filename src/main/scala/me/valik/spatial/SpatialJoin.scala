@@ -53,7 +53,7 @@ object SpatialJoin {
     // try to convert to int the number after space symbol; 0 by default
     import me.valik.toolbox.StringToolbox._
     implicit val sep = Separators(" ")
-    val radiusM = op.extractNumber(1).getOrElse(0)
+    val radiusM = op.extractNumber(1).getOrElse(0d)
 
     Distance(radiusM, radiusM / metersInDeg)
   }

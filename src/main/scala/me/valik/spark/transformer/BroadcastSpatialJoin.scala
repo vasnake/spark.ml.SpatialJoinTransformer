@@ -324,52 +324,40 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
       }
     }
 
-    // columns added after spatial join
-    val distColName = "distance"
-    val directionColName = "clockwise"
+    // column added after spatial join
+    val distColName = Identifiable.randomUID("distance")
 
     // convert rdd to dataframe
-    val crosstabDf = {
-      val fields: Seq[StructField] = input.schema.fields.toSeq ++
+    val crosstabDF: DataFrame = {
+      val fields: Seq[StructField] =
+        input.schema.fields.toSeq ++
         dataset.schema.fields.toSeq :+
-        (if (needDistance) StructField(distColName, DataTypes.DoubleType) else null) :+
-        (if (needDirection) StructField(directionColName, DataTypes.BooleanType) else null)
+          StructField(distColName, DataTypes.IntegerType)
 
-      val schema = StructType(fields.filter(_ != null))
+      val schema = StructType(fields.filter(
+        _.name != distColName || needDistance
+      ))
 
-      val rdd = crosstable.map { case (dsrow, inprow, dist, dir) => {
-        Row.fromSeq(inprow.toSeq ++ dsrow.toSeq ++ Seq(dist, dir))
-      }}
+      val rdd = crosstable.map { case (dsrow, inprow, dist) =>
+        if (needDistance) Row.fromSeq(inprow.toSeq ++ dsrow.toSeq ++ Seq(dist))
+        else Row.fromSeq(inprow.toSeq ++ dsrow.toSeq)
+      }
 
       spark.createDataFrame(rdd, schema)
-        .dropDateIntervalColumns(datePruningConfig)
     }
-    show(crosstabDf, "crosstable")
+    // debug
+    show(crosstabDF, "crosstable")
 
-    // input left-outer-join data
+    // select columns: all input, required from dataset, distance
+    import org.apache.spark.sql.functions.col
+    val icols = input.schema.fields.map(f => col(f.name))
+    val dcols = config.datasetCfg.dataColumns.zip(config.datasetCfg.aliases)
+      .map { case (name, alias) => col(name) as alias }
+    val distcol =
+      if (needDistance) Seq(col(distColName) as config.distanceColumnAlias)
+      else Seq.empty
 
-    if (config.aggStatement.isEmpty) {
-      // add 'data' and, optionally, distance
-      val dcols = dataColNames.zip(config.dataColAlias).map { case (name, alias) =>
-        col(s"link.$name") as alias
-      }
-      val distdir = (
-        if (needDistance) Seq(col(s"link.$distColName") as config.distColAlias)
-        else Seq.empty) ++ (
-        if (needDirection) Seq(col(s"link.$directionColName") as config.clockwiseAlias)
-        else Seq.empty)
-
-      inputDF.as("input").join(crosstabDf.as("link"), inputKeyColNames, "left_outer")
-        .select((Seq($"input.*") ++ dcols ++ distdir): _*)
-    }
-    else {
-      // add aggregation result, no 'data' or 'distance'
-      val folded = contextAggUtils.executeSql(crosstabDf, config.aggStatement, inputKeyColNames)
-      val addcols = folded.columns.filter(cn => !inputDF.columns.contains(cn))
-
-      inputDF.as("input").join(folded.as("link"), inputKeyColNames, "left_outer")
-        .select("input.*", addcols: _*)
-    }
+    crosstabDF.select((icols ++ dcols ++ distcol): _*)
   }
 
   /**
