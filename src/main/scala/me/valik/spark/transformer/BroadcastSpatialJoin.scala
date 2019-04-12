@@ -268,46 +268,56 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     import spark.implicits._
 
     // geometry interface
-    val inputGeom = config.inputCfg.geomSpec
-    val dsetGeom = config.datasetCfg.geomSpec
+    //val inputGeom = config.inputCfg.geomSpec
+    //val dsetGeom = config.datasetCfg.geomSpec
     // data to join
     val needDistance = config.distanceColumnAlias.nonEmpty
-    val dataColNames = config.datasetCfg.dataColumns
+    //val dataColNames = config.datasetCfg.dataColumns
     // filter by distance needed?
     val filterByDist = isWithinD(config.spatialPredicate)
     val radius = extractRadius(config.spatialPredicate).meters.toInt // n meters or 0
+
+    // join postprocessing: distance, precise filter-by-distance, etc?
+    // (datasetRow, inputRow, distance_m)
+    def postprocess(dscols: Row, incols: Row, dsgeom: Geometry, ingeom: Geometry
+    ): Option[(Row, Row, Int)] = {
+      // calc distance if needed: meters between centroids
+      def distance: Int = {
+        if (filterByDist || needDistance) geoDistance(dsgeom, ingeom)
+        else 0
+      }
+      // filter by distance if required
+      if (filterByDist && distance > radius) None
+      else Some((dscols, incols, distance))
+    }
 
     // from dataset we need (geometry, data, used-in-filter cols),
     // selected already on loadDataset stage
     val dataset = config.datasetCfg.df
     // from input we need all
     val input = inputDF
-    // debug
-    show(dataset, s"dataset parts ${dataset.rdd.getNumPartitions}")
-    show(input, s"input parts ${input.rdd.getNumPartitions}")
 
     // extra filter func
-    val condition = extraConditionFunc(config.extraPredicate)
-
-    // join postprocessing: distance, precise filter-by-distance, etc?
-    def postprocess(dscols: Row, incols: Row, dsgeom: Geometry, ingeom: Geometry
-    ): Option[(Row, Row, Double, Boolean)] = {
-      ???
-    }
+    //val condition = extraConditionFunc(config.extraPredicate)
 
     // do join: create Geometry object for each row, invoke BroadcastSpatialJoin wrapper
+    // (datasetRow, inputRow, distance_m)
     val crosstable = {
       import me.valik.spark.geometry.DatasetGeometry._
 
+      // debug
+      show(dataset, s"dataset parts ${dataset.rdd.getNumPartitions}")
+      show(input, s"input parts ${input.rdd.getNumPartitions}")
+
       // rdd(dataset, geom)
-      val ds = addGeometryToRDD(dataset, dsetGeom)
+      val ds = addGeometryToRDD(dataset, config.datasetCfg.geomSpec)
       // rdd(input, geom)
-      val inp = addGeometryToRDD(input, inputGeom)
+      val inp = addGeometryToRDD(input, config.inputCfg.geomSpec)
 
       // do spatial join, broadcasting dataset or input; compute distance
       spatialJoinWrapper(spark, ds, inp,
         config.spatialPredicate,
-        condition,
+        extraConditionFunc(config.extraPredicate),
         config.broadcastInput
       ).flatMap { case (dscols, incols, dsgeom, ingeom) =>
         postprocess(dscols, incols, dsgeom, ingeom)

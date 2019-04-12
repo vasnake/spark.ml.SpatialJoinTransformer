@@ -1,8 +1,22 @@
 package me.valik.spatial
 
+import org.locationtech.jts.geom.Geometry
 import spatialspark.operator.SpatialOperator
 
 object SpatialJoin {
+
+  /**
+    * get Geodesic.distance between g1.centroid and g2.centroid, meters
+    */
+  def geoDistance(g1: Geometry, g2: Geometry): Int = {
+    import net.sf.geographiclib.Geodesic
+    val (p1, p2) = (g1.getCentroid, g2.getCentroid)
+
+    math.round(
+      Geodesic.WGS84.Inverse(p1.getY, p1.getX, p2.getY, p2.getX)
+        .s12
+    ).toInt
+  }
 
   /**
     * parse spatial operator name

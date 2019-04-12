@@ -26,8 +26,8 @@ val testDeps = Seq(
 )
 
 val spatialDeps = Seq(
-  // https://github.com/locationtech/jts
-  "org.locationtech.jts" % "jts-core" % "1.16.1"
+  "org.locationtech.jts" % "jts-core" % "1.16.1",
+  "net.sf.geographiclib" % "GeographicLib-Java" % "1.49"
 )
 
 val buildSettings = Seq(
