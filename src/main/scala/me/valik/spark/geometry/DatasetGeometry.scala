@@ -1,9 +1,9 @@
 package me.valik.spark.geometry
 
-import org.apache.spark.sql.{Column, Row}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{Column, DataFrame, Row}
 import org.apache.spark.sql.types.DataTypes
-
-import org.locationtech.jts.geom.{Coordinate, Geometry, GeometryFactory}
+import org.locationtech.jts.geom.{Coordinate, Geometry, GeometryFactory, PrecisionModel}
 import org.locationtech.jts.io.WKTReader
 
 object DatasetGeometry {
@@ -23,6 +23,31 @@ object DatasetGeometry {
   }
 
   case class GeometryMeta(gf: GeometryFactory, wktReader: WKTReader)
+
+  object GeometryMeta {
+    def apply(srid: Int): GeometryMeta = {
+      val gf = new GeometryFactory(new PrecisionModel(PrecisionModel.FLOATING), srid)
+      new GeometryMeta(gf, new WKTReader(gf))
+    }
+  }
+
+  /**
+    * Create RDD by adding Geometry to df Row.
+    * Geometry object will be created from df columns using geomSpec interface.
+    * n.b. sometimes geometry can be null!
+    * @param df input data frame
+    * @param geomSpec geometry data specification
+    * @return df.rdd.mapPartition ... (row, geometry)
+    */
+  def addGeometryToRDD(df: DataFrame, geomSpec: DatasetGeometry): RDD[(Row, Geometry)] = {
+    import me.valik.spark.geometry.DatasetGeometry._
+    // preservesPartitioning = true ? may be, if you can explain why it's important here
+    df.rdd.mapPartitions(it => {
+      implicit val gm = GeometryMeta(sridWGS84)
+      // geometry can be null?
+      for (row <- it) yield (row, geomSpec.geometry(row))
+    })
+  }
 
   /**
     * abstraction over two types of geometry: from wkt column or from point(lon, lat) columns

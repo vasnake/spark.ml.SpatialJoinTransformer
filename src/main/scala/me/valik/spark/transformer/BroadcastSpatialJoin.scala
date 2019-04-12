@@ -3,7 +3,7 @@ package me.valik.spark.transformer
 
 import org.apache.spark.ml.Transformer
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SparkSession}
-import org.apache.spark.sql.types.{DataTypes, StructType}
+import org.apache.spark.sql.types.{DataTypes, StructField, StructType}
 import org.apache.spark.ml.param.{Param, ParamMap, Params}
 import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, Identifiable}
 import org.locationtech.jts.geom.{Coordinate, Geometry, GeometryFactory}
@@ -264,12 +264,7 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
   def spatialJoin(inputDF: DataFrame, config: TransformerConfig, spark: SparkSession): DataFrame = {
     import me.valik.spatial.SpatialJoin._
-    //import spark.implicits._
-    //import org.locationtech.jts.geom._
-    //implicit val gm = {
-    //  val gf = new GeometryFactory(new PrecisionModel(PrecisionModel.FLOATING), sridWGS84)
-    //  GeometryMeta(gf, new WKTReader(gf))
-    //}
+    import spark.implicits._
 
     // geometry interface
     val inputGeom = config.inputCfg.geomSpec
@@ -281,65 +276,41 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     val filterByDist = isWithinD(config.spatialPredicate)
     val radius = extractRadius(config.spatialPredicate).meters.toInt // n meters or 0
 
-    // from dataset we need (geometry, data, used-in-filter-cols)
-    val dataset = {
-      val dset = config.datasetCfg.dataset
-      val gcols = dsetGeom.colnames.toSet
-      val dcols: Set[String] = (dataColNames ++ extraConditionCols(config.extraPredicate, dset)).toSet -- gcols
-      val additionalDateCols =
-        if (datePruningConfig.isDefined) Seq(DATASET_DATE_COLUMN)
-        else Seq()
-      val cols = (dcols ++ additionalDateCols).toList.map(col) ++ dsetGeom.columns
-
-      dset.select(cols: _*)
-    }
-
-    // from input we need (keys, geometry)
-    val input = inputDF.select(inputKeyColNames.map(col) ++ inputGeom.columns: _*)
-      .withDateIntervalColumns(datePruningConfig)
-
+    // from dataset we need (geometry, data, used-in-filter cols),
+    // selected already on loadDataset stage
+    val dataset = config.datasetCfg.df
+    // from input we need all
+    val input = inputDF
     // debug
     show(dataset, s"dataset parts ${dataset.rdd.getNumPartitions}")
     show(input, s"input parts ${input.rdd.getNumPartitions}")
 
     // extra filter func
-    val condition = extraConditionFunc(config.extraPredicate, dataset)
+    val condition = extraConditionFunc(config.extraPredicate)
 
-    // join postprocessing: distance, direction, precise filter-by-distance
+    // join postprocessing: distance, precise filter-by-distance, etc?
     def postprocess(dscols: Row, incols: Row, dsgeom: Geometry, ingeom: Geometry
     ): Option[(Row, Row, Double, Boolean)] = {
-      lazy val (point, segment) = (Point(ingeom), Segment(dsgeom))
-
-      // calc distance if needed: meters between centroids
-      val distance = {
-        if (filterByDist || needDistance) {
-          if (isSegmentDataset) point2SegmentDistance(point, segment).toDouble
-          else geoDistance(dsgeom, ingeom).toDouble
-        }
-        else 0d
-      }
-
-      // calc CW/CCW direction if needed
-      def direction = {
-        if (needDirection) isSegmentClockwise(point, segment)
-        else false
-      }
-
-      // filter by distance if required
-      if (!filterByDist || distance <= radius) Some((dscols, incols, distance, direction))
-      else None
+      ???
     }
 
-    // do join
+    // do join: create Geometry object for each row, invoke BroadcastSpatialJoin wrapper
     val crosstable = {
-      // (dataset keys, geom)
-      val ds = dataset.rdd.map { case row: Row => (row, dsetGeom.geometry(row)) }
-      // (input keys, geom)
-      val inp = input.rdd.map { case row: Row => (row, inputGeom.geometry(row)) }
+      import me.valik.spark.geometry.DatasetGeometry._
 
-      // do spatial join, broadcasting dataset or input; compute distance, directions
-      spatialJoinWrapper(spark, ds, inp, config.predicate, condition, config.broadcastInput, datePruningConfig)
-        .flatMap { case (dscols, incols, dsgeom, ingeom) => postprocess(dscols, incols, dsgeom, ingeom) }
+      // rdd(dataset, geom)
+      val ds = addGeometryToRDD(dataset, dsetGeom)
+      // rdd(input, geom)
+      val inp = addGeometryToRDD(input, inputGeom)
+
+      // do spatial join, broadcasting dataset or input; compute distance
+      spatialJoinWrapper(spark, ds, inp,
+        config.spatialPredicate,
+        condition,
+        config.broadcastInput
+      ).flatMap { case (dscols, incols, dsgeom, ingeom) =>
+        postprocess(dscols, incols, dsgeom, ingeom)
+      }
     }
 
     // columns added after spatial join
