@@ -10,7 +10,7 @@ object SpatialJoin {
     * @param predicate one of: withindist, within, contains, intersects, overlaps
     * @return NearestD by default
     */
-  protected def spatialOperator(predicate: String): SpatialOperator.SpatialOperator =
+  def spatialOperator(predicate: String): SpatialOperator.SpatialOperator =
     predicate.toLowerCase match {
       case p if p.contains("withindist") => SpatialOperator.WithinD
       case p if p.contains("within") => SpatialOperator.Within

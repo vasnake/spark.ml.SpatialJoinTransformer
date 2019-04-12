@@ -6,6 +6,7 @@ import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.types.{DataTypes, StructField, StructType}
 import org.apache.spark.ml.param.{Param, ParamMap, Params}
 import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, Identifiable}
+import org.apache.spark.rdd.RDD
 import org.locationtech.jts.geom.{Coordinate, Geometry, GeometryFactory}
 import org.locationtech.jts.io.WKTReader
 
@@ -358,6 +359,47 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
       inputDF.as("input").join(folded.as("link"), inputKeyColNames, "left_outer")
         .select("input.*", addcols: _*)
+    }
+  }
+
+  /**
+    * Call rewrited BroadcastSpatialJoin left.predicate(right), return RDD.
+    * Arbitrary objects allowed.
+    *
+    * @param spark     session
+    * @param dataset   big dataset, `left`
+    * @param input     small (to broadcast) dataset, `right`
+    * @param predicate spatial relation, one of: within, contains, intersects, overlaps, nearest, etc;
+    *                  see {@link spatialOperator}.
+    *                              `withindist` should be defined as `withindist meters` e.g. `withindist 10000`
+    *                              for finding all right objects closer than 10km to left object.
+    * @param condition  extra predicate for filtering rows before joining rigth to left
+    * @param broadcastInput join direction, if true: right will be broadcasted, otherwise left;
+    *                       n.b. if `broadcastInput` is `false` then join implementation consider
+    *                       left as right and vice versa! It is a bit confusing, suck it up.
+    * @return (left, right, leftgeom, rightgeom)
+    */
+  def spatialJoinWrapper(spark: SparkSession,
+    dataset: RDD[(Row, Geometry)],
+    input: RDD[(Row, Geometry)],
+    predicate: String,
+    condition: Option[(Row, Row) => Boolean] = None,
+    broadcastInput: Boolean = true
+  ): RDD[(Row, Row, Geometry, Geometry)] = {
+
+    import me.valik.spatial.SpatialJoin._
+    import spatialspark.join.{BroadcastSpatialJoin => BSJ}
+
+    val spatOp = spatialOperator(predicate)
+    val radius = extractRadius(predicate).meters
+
+    if (broadcastInput)
+      BSJ(spark.sparkContext, dataset, input, spatOp, radius, condition)
+    else {
+      BSJ(spark.sparkContext, input, dataset, spatOp, radius,
+        // switch left and right, then switch back
+        condition.map(f => { (r: Row, l: Row) => f(l, r) })
+      ).map(tup => (tup._2, tup._1, tup._4, tup._3))
     }
   }
 
