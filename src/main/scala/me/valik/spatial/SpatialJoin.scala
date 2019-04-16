@@ -3,6 +3,8 @@ package me.valik.spatial
 import org.locationtech.jts.geom.Geometry
 import spatialspark.operator.SpatialOperator
 
+// TODO: add unit tests
+
 object SpatialJoin {
 
   /**

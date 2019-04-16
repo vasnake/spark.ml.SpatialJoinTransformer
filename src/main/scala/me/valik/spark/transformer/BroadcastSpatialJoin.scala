@@ -331,6 +331,8 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
     // convert rdd to dataframe
     val crosstabDF: DataFrame = {
+      // TODO: do projection here
+
       val fields: Seq[StructField] =
         input.schema.fields.toSeq ++
         dataset.schema.fields.toSeq :+

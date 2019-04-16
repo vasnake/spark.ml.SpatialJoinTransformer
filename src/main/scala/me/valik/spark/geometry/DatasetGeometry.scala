@@ -61,6 +61,7 @@ object DatasetGeometry {
   case class DatasetGeometryPoint(lon: String, lat: String) extends DatasetGeometry {
     private def getRowVal(row: Row, fn: String): Double = row.get(row.fieldIndex(fn)) match {
       case a: Double => a
+      case a: Float => a.toDouble
       case b: String => b.toDouble
       case c: Int => c.toDouble
       case d => d.toString.toDouble
