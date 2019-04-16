@@ -6,11 +6,13 @@ val Name = "spark-transformer-spatialjoin"
 val Version = "0.0.1-SNAPSHOT"
 
 val ScalaVersion = "2.12.8"
-val SparkVersion = "2.4.0"
+val SparkVersion = "2.4.1"
 
 val sparkDeps = Seq(
   //"org.apache.spark" %% "spark-streaming" % SparkVersion,
   //"org.apache.spark" %% "spark-sql" % SparkVersion,
+  //"org.apache.spark" %% "spark-hive" % SparkVersion,
+  "org.apache.spark" %% "spark-mllib" % SparkVersion,
   "org.apache.spark" %% "spark-core" % SparkVersion
 )
 
@@ -21,6 +23,11 @@ val testDeps = Seq(
   // not ready yet: unresolved dependency: com.holdenkarau#spark-testing-base_2.12;2.4.0_0.11.0
   // use local lib (sbt +package) from https://github.com/vasnake/spark-testing-base
    "com.holdenkarau" %% "spark-testing-base" % "2.4.0_0.11.0"
+)
+
+val spatialDeps = Seq(
+  "org.locationtech.jts" % "jts-core" % "1.16.1",
+  "net.sf.geographiclib" % "GeographicLib-Java" % "1.49"
 )
 
 val buildSettings = Seq(
@@ -58,6 +65,7 @@ concurrentRestrictions in Scope.Global += Tags.limit(Tags.Test, 1)
 lazy val root = (project in file(".")).settings(
   buildSettings ++ Seq(
     libraryDependencies ++= sparkDeps.map(_ % Provided)
+      ++ spatialDeps
       ++ testDeps.map(_ % Test)
   )
 
@@ -67,4 +75,4 @@ lazy val root = (project in file(".")).settings(
   // uses compile classpath for the run task, including "provided" jar (cf http://stackoverflow.com/a/21803413/3827)
   //run in Compile := Defaults.runTask(fullClasspath in Compile, mainClass in (Compile, run), runner in (Compile, run)).evaluated
 
-)
+).dependsOn(Projects.spatialSpark)
