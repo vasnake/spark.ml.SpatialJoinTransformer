@@ -329,39 +329,35 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     // column added after spatial join
     val distColName = Identifiable.randomUID("distance")
 
-    // convert rdd to dataframe
+    // convert rdd to dataframe, select required fields
     val crosstabDF: DataFrame = {
-      // TODO: do projection here
+      val datasetColNames = dataset.schema.fields.map(_.name)
+      val selectedNames = config.datasetCfg.dataColumns.toSet
 
-      val fields: Seq[StructField] =
-        input.schema.fields.toSeq ++
-        dataset.schema.fields.toSeq :+
-          StructField(distColName, DataTypes.IntegerType)
-
-      val schema = StructType(fields.filter(
-        _.name != distColName || needDistance
-      ))
-
-      val rdd = crosstable.map { case (dsrow, inprow, dist) =>
-        if (needDistance) Row.fromSeq(inprow.toSeq ++ dsrow.toSeq ++ Seq(dist))
-        else Row.fromSeq(inprow.toSeq ++ dsrow.toSeq)
+      val schema = {
+        val selectedFields = dataset.schema.fields
+          .filter(f => selectedNames.contains(f.name ))
+        val fields: Seq[StructField] = input.schema.fields ++ selectedFields
+        if (needDistance) StructType(fields :+ StructField(distColName, DataTypes.IntegerType))
+        else StructType(fields)
       }
+
+      def selectedCols(cols: Seq[Any]): Seq[Any] = {
+        val pairs = cols zip datasetColNames
+        val res = pairs.filter { case (_, n) => selectedNames.contains(n) }
+        res.map(_._1)
+      }
+
+      val rdd = crosstable.map { case (dsrow, inprow, dist) => {
+        val res = inprow.toSeq ++ selectedCols(dsrow.toSeq)
+        if (needDistance) Row.fromSeq(res ++ Seq(dist))
+        else Row.fromSeq(res)
+      } }
 
       spark.createDataFrame(rdd, schema)
     }
-    // debug
-    show(crosstabDF, "crosstable")
 
-    // select columns: all input, required from dataset, distance
-    import org.apache.spark.sql.functions.col
-    val icols = input.schema.fields.map(f => col(f.name))
-    val dcols = config.datasetCfg.dataColumns.zip(config.datasetCfg.aliases)
-      .map { case (name, alias) => col(name) as alias }
-    val distcol =
-      if (needDistance) Seq(col(distColName) as config.distanceColumnAlias)
-      else Seq.empty
-
-    crosstabDF.select((icols ++ dcols ++ distcol): _*)
+    crosstabDF
   }
 
   /**
