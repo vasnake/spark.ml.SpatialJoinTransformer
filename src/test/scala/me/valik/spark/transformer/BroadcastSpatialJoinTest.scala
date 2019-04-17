@@ -7,8 +7,8 @@ import org.apache.spark.storage.StorageLevel
 
 object BroadcastSpatialJoinTest {
   case class PointID(id: String, lon: Double, lat: Double)
-  case class PoiID(poi_id: String, lon: Double, lat: Double)
-  case class PointPoi(id: String, lon: Double, lat: Double, poi_id: String)
+  case class PoiID(poi_id: String, lon: Double, lat: Double, name: Option[String] = None)
+  case class PointPoi(id: String, lon: Double, lat: Double, poi_id: String, name: Option[String] = None)
 
   import scala.language.implicitConversions
   import me.valik.toolbox.StringToolbox._
@@ -21,12 +21,12 @@ object BroadcastSpatialJoinTest {
   } yield PointID(k, x.toDouble, y.toDouble)
 
   def parsePoiID(text: String): Seq[PoiID] = for {
-    Array(k, x, y) <- parseColumns(text).take(3)
-  } yield PoiID(k, x.toDouble, y.toDouble)
+    Array(k, x, y, rest @ _*) <- parseColumns(text)
+  } yield PoiID(k, x.toDouble, y.toDouble, rest.headOption)
 
   def parsePointPoi(text: String): Seq[PointPoi] = for {
-    Array(k, x, y, d) <- parseColumns(text).take(4)
-  } yield PointPoi(k, x.toDouble, y.toDouble, d)
+    Array(k, x, y, d, rest @ _*) <- parseColumns(text)
+  } yield PointPoi(k, x.toDouble, y.toDouble, d, rest.headOption)
 
   def makeTransformer(data: DataFrame, name: String = "poi") = {
     data.createOrReplaceTempView(name)
@@ -72,8 +72,39 @@ class BroadcastSpatialJoinTest extends
     assertDataFrameEquals(output, expected.toDF)
   }
 
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "rename"
+  it should "rename selected data columns" in {
+    import spark.implicits._
+
+    val input = parsePointID(
+      """
+        |i1, 1, 1
+        |i2, 2, 2
+      """.stripMargin).toDS
+
+    val data = parsePoiID(
+      """
+        |d1, 1.1, 1.1, a
+        |d2, 2.1, 2.1, b
+      """.stripMargin).toDS
+
+    val expected = parsePointPoi(
+      """
+        |i1, 1, 1, d1, a
+        |i2, 2, 2, d2, b
+      """.stripMargin).toDS
+
+    val transformer = makeTransformer(data.toDF)
+      .setDataColumns("poi_id, name")
+      .setDataColAlias("poi_number, poi_name")
+
+    val output = transformer.transform(input)
+    output.show(3, truncate=false)
+    import me.valik.toolbox.StringToolbox._
+    assertDataFrameEquals(output, expected.toDF("id, lon, lat, poi_number, poi_name".splitTrim(","): _*))
+  }
+
   // TODO:
-  //  col.aliases ([not]full set);
   //  add distance ([no]alias);
   //  num.partitions;
   //  inputPoint/inputWKT;
@@ -83,4 +114,5 @@ class BroadcastSpatialJoinTest extends
   //  broadcast: input, dataset;
   //  filter;
   //  condition
+  //  transformSchema
 }

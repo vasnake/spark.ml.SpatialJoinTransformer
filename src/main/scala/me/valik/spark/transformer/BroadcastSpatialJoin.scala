@@ -195,19 +195,19 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
     TransformerConfig(
       ExternalDatasetConfig(
-        name = $(dataset),
+        name = $(dataset).trim,
         df = ds,
-        wktColumn = $(datasetWKT),
-        parsePointColumns($(datasetPoint)),
+        wktColumn = $(datasetWKT).trim,
+        parsePointColumns($(datasetPoint).trim),
         dataCols,
         dataColAliases),
       InputDatasetConfig(
-        wktColumn = $(inputWKT),
-        parsePointColumns($(inputPoint))),
-      $(distanceColumnAlias),
-      spatialPredicate = $(predicate),
-      extraPredicate = $(condition),
-      broadcastInput = $(broadcast) == input
+        wktColumn = $(inputWKT).trim,
+        parsePointColumns($(inputPoint).trim)),
+      $(distanceColumnAlias).trim,
+      spatialPredicate = $(predicate).trim,
+      extraPredicate = $(condition).trim,
+      broadcastInput = $(broadcast).trim == input
     )
   }
 
@@ -326,9 +326,6 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
       }
     }
 
-    // column added after spatial join
-    val distColName = Identifiable.randomUID("distance")
-
     // convert rdd to dataframe, select required fields
     val crosstabDF: DataFrame = {
       val datasetColNames = dataset.schema.fields.map(_.name)
@@ -337,8 +334,13 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
       val schema = {
         val selectedFields = dataset.schema.fields
           .filter(f => selectedNames.contains(f.name ))
-        val fields: Seq[StructField] = input.schema.fields ++ selectedFields
-        if (needDistance) StructType(fields :+ StructField(distColName, DataTypes.IntegerType))
+
+        val selectedNameAlias = (config.datasetCfg.dataColumns zip config.datasetCfg.aliases).toMap
+
+        val fields: Seq[StructField] = input.schema.fields ++
+          selectedFields.map(f => f.copy(name=selectedNameAlias(f.name)))
+
+        if (needDistance) StructType(fields :+ StructField(config.distanceColumnAlias, DataTypes.IntegerType))
         else StructType(fields)
       }
 
