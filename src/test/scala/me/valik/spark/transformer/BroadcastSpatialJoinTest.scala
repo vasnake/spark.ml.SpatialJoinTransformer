@@ -29,9 +29,9 @@ object BroadcastSpatialJoinTest {
   } yield PointPoi(k, x.toDouble, y.toDouble, d)
 
   def makeTransformer(data: DataFrame, name: String = "poi") = {
-    data.createOrReplaceTempView("poi")
+    data.createOrReplaceTempView(name)
     new BroadcastSpatialJoin()
-      .setDataset("poi")
+      .setDataset(name)
       .setDatasetPoint("lon, lat")
       .setInputPoint("lon, lat")
       .setDataColumns("poi_id")
@@ -71,4 +71,16 @@ class BroadcastSpatialJoinTest extends
     //output.show(3, truncate=false)
     assertDataFrameEquals(output, expected.toDF)
   }
+
+  // TODO:
+  //  col.aliases ([not]full set);
+  //  add distance ([no]alias);
+  //  num.partitions;
+  //  inputPoint/inputWKT;
+  //  datasetPoint/datasetWKT;
+  //  dataColumns (1,2,...)
+  //  predicate: withindist, within, contains, intersects, overlaps, nearest;
+  //  broadcast: input, dataset;
+  //  filter;
+  //  condition
 }
