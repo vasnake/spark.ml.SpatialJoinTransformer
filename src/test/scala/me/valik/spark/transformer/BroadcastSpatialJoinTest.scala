@@ -68,8 +68,8 @@ class BroadcastSpatialJoinTest extends
 
     val transformer = makeTransformer(data.toDF)
     val output = transformer.transform(input) // .persist(StorageLevel.MEMORY_ONLY)
-    //output.show(3, truncate=false)
-    assertDataFrameEquals(output, expected.toDF)
+    output.show(3, truncate=false)
+    assertDataFrameEquals(output, expected.select('id, 'lon, 'lat, 'poi_id))
   }
 
   // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "rename"

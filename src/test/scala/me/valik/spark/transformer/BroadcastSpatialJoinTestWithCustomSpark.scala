@@ -32,13 +32,13 @@ class BroadcastSpatialJoinTestWithCustomSpark extends
       """.stripMargin).toDS
 
     val res = makeTransformer(data.toDF).transform(input)
-    //res.show(3, truncate=false)
+    res.show(3, truncate=false)
 
     //res.collect should contain theSameElementsAs Seq(
     //  Row("i1", 1d, 1d, "d1"),
     //  Row("i2", 2d, 2d, "d2")
     //)
 
-    assertDataFrameEquals(res, expected.toDF)
+    assertDataFrameEquals(res, expected.select('id, 'lon, 'lat, 'poi_id))
   }
 }
