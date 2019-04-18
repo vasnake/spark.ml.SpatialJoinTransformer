@@ -35,7 +35,7 @@ class BroadcastSpatialJoinTest extends
     val transformer = makeTransformer(data.toDF)
     val output = transformer.transform(input) // .persist(StorageLevel.MEMORY_ONLY)
 
-    output.show(3, truncate=false)
+    output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectPP)
   }
 
@@ -66,7 +66,7 @@ class BroadcastSpatialJoinTest extends
         .setDataColumns("poi_id as poi_number, name")
       val output = transformer.transform(input)
 
-      output.show(3, truncate=false)
+      output.show(20, truncate=false)
       assertDataFrameEquals(output, expected.selectCSV(
         "id, lon, lat, poi_id as poi_number, name"))
     }
@@ -75,7 +75,7 @@ class BroadcastSpatialJoinTest extends
       .setDataColumns("poi_id as poi_number, name as poi_name")
     val output = transformer.transform(input)
 
-    output.show(3, truncate=false)
+    output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectCSV(
       "id, lon, lat, poi_id as poi_number, name as poi_name"))
 
@@ -108,7 +108,7 @@ class BroadcastSpatialJoinTest extends
       .setDistColAlias("distance")
     val output = transformer.transform(input)
 
-    output.show(3, truncate=false)
+    output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectCSV(
       "id, lon, lat, poi_id, int(name) as distance"))
   }
@@ -167,7 +167,7 @@ class BroadcastSpatialJoinTest extends
       .setPredicate("within") // data point within input polygon (broadcast input)
     val output = transformer.transform(input)
 
-    output.show(3, truncate=false)
+    output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectCSV(
       "id, wkt, poi_id"))
   }
@@ -205,8 +205,47 @@ class BroadcastSpatialJoinTest extends
       "id, lon, lat, poi_id"))
   }
 
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "join selected"
+  it should "join selected data columns" in {
+    import spark.implicits._
+
+    val input = parsePointID(
+      """
+        |i1, 1, 1
+        |i2, 2, 2
+      """.stripMargin).toDS
+
+    val data = parsePoiID(
+      """
+        |d1, 1.1, 1.1, a
+        |d2, 2.1, 2.1, b
+      """.stripMargin).toDS
+
+    val expected = parsePointPoi(
+      """
+        |i1, 1, 1, d1, a
+        |i2, 2, 2, d2, b
+      """.stripMargin).toDS
+
+    def onlyOne = {
+      val transformer = makeTransformer(data.toDF)
+        .setDataColumns("name")
+      val output = transformer.transform(input)
+      output.show(20, truncate=false)
+      assertDataFrameEquals(output, expected.selectCSV("id, lon, lat, name"))
+    }
+
+    val transformer = makeTransformer(data.toDF)
+      .setDataColumns("poi_id, name")
+    val output = transformer.transform(input)
+
+    output.show(20, truncate=false)
+    assertDataFrameEquals(output, expected.toDF)
+
+    onlyOne
+  }
+
   // TODO:
-  //  dataColumns (1,2,...)
   //  predicate: withindist, +within, +contains, intersects, overlaps, +nearest;
   //  broadcast: input, dataset;
   //  filter;
