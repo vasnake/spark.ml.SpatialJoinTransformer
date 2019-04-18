@@ -308,8 +308,39 @@ class BroadcastSpatialJoinTest extends
     assertDataFrameEquals(output, expected.selectCSV("id, wkt, poi_id"))
   }
 
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "overlaps"
+  it should "use overlaps predicate" in {
+    import spark.implicits._
+
+    val input = parseWKTPointID(
+      """
+        |i1; POLYGON((2 4,2 2,4 2,2 4))
+        |i2; POLYGON((12 4,12 2,14 2,12 4))
+      """.stripMargin).toDS
+
+    val data = parseWKTPoiID(
+      """
+        |d1; POLYGON((3 1,3 3,1 3,3 1))
+        |d2; POLYGON((13 1,13 3,11 3,13 1))
+      """.stripMargin).toDS
+
+    val expected = parseWKTPointPoi(
+      """
+        |i1; POLYGON((2 4,2 2,4 2,2 4)); d1
+        |i2; POLYGON((12 4,12 2,14 2,12 4)); d2
+      """.stripMargin).toDS
+
+    val transformer = makeTransformer(data.toDF)
+      .setPredicate("overlaps")
+      .setInputPoint("").setInputWKT("wkt")
+      .setDatasetPoint("").setDatasetWKT("wkt")
+    val output = transformer.transform(input)
+
+    output.show(20, truncate=false)
+    assertDataFrameEquals(output, expected.selectCSV("id, wkt, poi_id"))
+  }
+
   // TODO:
-  //  predicate: +withindist, +within, +contains, +intersects, overlaps, +nearest;
   //  broadcast: input, dataset;
   //  filter;
   //  condition
