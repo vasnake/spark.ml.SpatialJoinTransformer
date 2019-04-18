@@ -79,15 +79,16 @@ class BroadcastSpatialJoin(override val uid: String) extends
   setDefault(dataset, "")
   def setDataset(value: String): this.type = set(dataset, value)
 
+  /**
+    * External dataset columns required to join to input dataset.
+    * Column can be renamed after join, in that case add ` as alias` to col.name.
+    * Provide a list in form of CSV, e.g. `id as poi_id, name`
+    */
   final val dataColumns = new Param[String](this, "dataColumns", "external ds column names to join to input, in csv format")
   setDefault(dataColumns, "")
   def setDataColumns(value: String): this.type = set(dataColumns, value)
 
-  final val dataColumnAliases = new Param[String](this, "dataColumnAliases", "aliases for added data columns, in csv format")
-  setDefault(dataColumnAliases, "")
-  def setDataColAlias(value: String): this.type = set(dataColumnAliases, value)
-
-  final val distanceColumnAlias = new Param[String](this, "distanceColumnAlias", "alias for added distance column")
+  final val distanceColumnAlias = new Param[String](this, "distanceColumnAlias", "alias for added `distance` column")
   setDefault(distanceColumnAlias, "")
   def setDistColAlias(value: String): this.type = set(distanceColumnAlias, value)
 
@@ -126,6 +127,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
   // config
 
   @transient private var config: Option[TransformerConfig] = None
+  @transient implicit val self = this
 
   protected def getConfig(spark: SparkSession): TransformerConfig = {
     config.getOrElse({
@@ -150,10 +152,10 @@ class BroadcastSpatialJoin(override val uid: String) extends
         s"${name}Point property should be empty or contain string like 'lon, lat'")
     }
 
-    checkGeomCols($(datasetWKT).trim, $(datasetPoint).trim, "dataset")
-    checkGeomCols($(inputWKT).trim, $(inputPoint).trim, "input")
+    checkGeomCols(datasetWKT.get, datasetPoint.get, "dataset")
+    checkGeomCols(inputWKT.get, inputPoint.get, "input")
 
-    require($(dataset).trim.nonEmpty, "dataset property must contain table or view name")
+    require(dataset.get.nonEmpty, "dataset property must contain table or view name")
     require($(dataColumns).splitTrim.length > 0,
       "dataColumns property must contain at least one column name")
   }
@@ -166,48 +168,49 @@ class BroadcastSpatialJoin(override val uid: String) extends
       PointColumns(lon, lat)
     }.getOrElse(PointColumns("", ""))
 
-    val dataCols: Seq[String] = $(dataColumns).splitTrim
+    val (dataCols, dataColAliases) = {
+      import DefaultSeparators.stringToSeparators
+      // convert "id as poi_id, name" to ((id, poi_id), (name, name))
+      val cols = $(dataColumns).splitTrim
+      val pairs = for (Array(name, alias @ _*) <- cols.map(_.splitTrim("as")))
+        yield (name, alias.headOption.getOrElse(name))
+      // separate names and aliases
+      (pairs.map(_._1), pairs.map(_._2))
+    }
 
     val ds = { // external dataset, filtered and projected
-      val conditionCols: Seq[String] = extraConditionColumns($(condition))
+      val conditionCols: Seq[String] = extraConditionColumns(condition.get)
       val cols = (dataCols ++
-        Seq($(datasetWKT)) ++
+        Seq(datasetWKT.get) ++
         $(datasetPoint).splitTrim ++
         conditionCols
         ).filter(_.nonEmpty).toSet.toList
 
-      val df: DataFrame = loadDataset($(dataset), spark)
-      val fltr = $(filter).trim
+      val df: DataFrame = loadDataset(dataset.get, spark)
+      val fltr = filter.get
       val filtered = if (fltr.nonEmpty) df.filter(fltr) else df
 
       val projected = filtered.select(cols.head, cols.tail: _*)
       Try {
-        projected.repartition($(numPartitions).trim.toInt)
+        projected.repartition(numPartitions.get.toInt)
       }.getOrElse(projected)
     }
 
-    val dataColAliases: Seq[String] = {
-      val dca = $(dataColumnAliases).splitTrim
-      dataCols.zipWithIndex.map { case (name, idx) =>
-        // find alias by index or use name as alias
-        dca.applyOrElse(idx, (_: Int) => name)
-      } }
-
     TransformerConfig(
       ExternalDatasetConfig(
-        name = $(dataset).trim,
+        name = dataset.get,
         df = ds,
-        wktColumn = $(datasetWKT).trim,
-        parsePointColumns($(datasetPoint).trim),
+        wktColumn = datasetWKT.get,
+        parsePointColumns(datasetPoint.get),
         dataCols,
         dataColAliases),
       InputDatasetConfig(
-        wktColumn = $(inputWKT).trim,
-        parsePointColumns($(inputPoint).trim)),
-      $(distanceColumnAlias).trim,
-      spatialPredicate = $(predicate).trim,
-      extraPredicate = $(condition).trim,
-      broadcastInput = $(broadcast).trim == input
+        wktColumn = inputWKT.get,
+        parsePointColumns(inputPoint.get)),
+      distanceColumnAlias.get,
+      spatialPredicate = predicate.get,
+      extraPredicate = condition.get,
+      broadcastInput = broadcast.get == input
     )
   }
 
@@ -251,6 +254,9 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
   type ExtraConditionFunc = (Row, Row) => Boolean
 
+  implicit class StringParam(val p: Param[String]) extends AnyVal {
+    def get(implicit owner: Params): String = owner.getOrDefault(p).trim
+  }
 
   /**
     * transformer debug tool

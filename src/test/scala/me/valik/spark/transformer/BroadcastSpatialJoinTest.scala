@@ -2,19 +2,13 @@ package me.valik.spark.transformer
 
 import org.scalatest._
 import com.holdenkarau.spark.testing.DataFrameSuiteBase
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.{DataFrame, Dataset, Row}
 import org.apache.spark.storage.StorageLevel
 
 object BroadcastSpatialJoinTest {
   case class PointID(id: String, lon: Double, lat: Double)
   case class PoiID(poi_id: String, lon: Double, lat: Double, name: Option[String] = None)
   case class PointPoi(id: String, lon: Double, lat: Double, poi_id: String, name: Option[String] = None)
-
-  import scala.language.implicitConversions
-  import me.valik.toolbox.StringToolbox._
-  implicit def stringToSeparators(sep: String): Separators = Separators(sep)
-
-  private def parseColumns(text: String) = text.splitTrim("\n").map(_.splitTrim(","))
 
   def parsePointID(text: String): Seq[PointID] = for {
     Array(k, x, y) <- parseColumns(text).take(3)
@@ -37,6 +31,20 @@ object BroadcastSpatialJoinTest {
       .setDataColumns("poi_id")
   }
 
+  import scala.language.implicitConversions
+  import me.valik.toolbox.StringToolbox._
+  import DefaultSeparators.stringToSeparators
+
+  private def parseColumns(text: String) = text.splitTrim("\n").map(_.splitTrim(","))
+
+  implicit class RichDataset(val ds: Dataset[_]) extends AnyVal {
+    def selectCSV(csv: String): DataFrame = {
+      val cols = csv.splitTrim(",")
+      ds.selectExpr(cols: _*)
+    }
+
+    def selectPP: DataFrame = selectCSV("id, lon, lat, poi_id")
+  }
 }
 
 class BroadcastSpatialJoinTest extends
@@ -69,11 +77,11 @@ class BroadcastSpatialJoinTest extends
     val transformer = makeTransformer(data.toDF)
     val output = transformer.transform(input) // .persist(StorageLevel.MEMORY_ONLY)
     output.show(3, truncate=false)
-    assertDataFrameEquals(output, expected.select('id, 'lon, 'lat, 'poi_id))
+    assertDataFrameEquals(output, expected.selectPP)
   }
 
-  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "rename"
-  it should "rename selected data columns" in {
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "aliases"
+  it should "rename selected data columns (aliases)" in {
     import spark.implicits._
 
     val input = parsePointID(
@@ -95,13 +103,12 @@ class BroadcastSpatialJoinTest extends
       """.stripMargin).toDS
 
     val transformer = makeTransformer(data.toDF)
-      .setDataColumns("poi_id, name")
-      .setDataColAlias("poi_number, poi_name")
+      .setDataColumns("poi_id as poi_number, name as poi_name")
 
     val output = transformer.transform(input)
     output.show(3, truncate=false)
-    import me.valik.toolbox.StringToolbox._
-    assertDataFrameEquals(output, expected.toDF("id, lon, lat, poi_number, poi_name".splitTrim(","): _*))
+    assertDataFrameEquals(output,
+      expected.selectCSV("id, lon, lat, poi_id as poi_number, name as poi_name"))
   }
 
   // TODO:

@@ -8,6 +8,9 @@ object StringToolbox {
 
   object DefaultSeparators {
     implicit val commaColon = Separators(",", Some(Separators(":")))
+
+    import scala.language.implicitConversions
+    implicit def stringToSeparators(sep: String): Separators = Separators(sep)
   }
 
   implicit class RichString(val src: String) extends AnyVal {

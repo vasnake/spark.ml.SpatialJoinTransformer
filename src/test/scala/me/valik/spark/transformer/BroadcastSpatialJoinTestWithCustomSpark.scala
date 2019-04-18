@@ -39,6 +39,6 @@ class BroadcastSpatialJoinTestWithCustomSpark extends
     //  Row("i2", 2d, 2d, "d2")
     //)
 
-    assertDataFrameEquals(res, expected.select('id, 'lon, 'lat, 'poi_id))
+    assertDataFrameEquals(res, expected.selectPP)
   }
 }
