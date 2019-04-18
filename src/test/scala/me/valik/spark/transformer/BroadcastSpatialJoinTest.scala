@@ -276,8 +276,40 @@ class BroadcastSpatialJoinTest extends
     assertDataFrameEquals(output, expected.selectPP)
   }
 
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "intersects"
+  it should "use intersects predicate" in {
+    import spark.implicits._
+
+    val input = parseWKTPointID(
+      """
+        |i1; LINESTRING(1 1,2 2)
+        |i2; LINESTRING(2 2,3 3)
+      """.stripMargin).toDS
+
+    val data = parseWKTPoiID(
+      """
+        |d1; LINESTRING(2 1,1 2)
+        |d2; LINESTRING(3 2,2 3)
+      """.stripMargin).toDS
+
+    val expected = parseWKTPointPoi(
+      """
+        |i1; LINESTRING(1 1,2 2); d1
+        |i2; LINESTRING(2 2,3 3); d2
+      """.stripMargin).toDS
+
+    val transformer = makeTransformer(data.toDF)
+      .setPredicate("intersects")
+      .setInputPoint("").setInputWKT("wkt")
+      .setDatasetPoint("").setDatasetWKT("wkt")
+    val output = transformer.transform(input)
+
+    output.show(20, truncate=false)
+    assertDataFrameEquals(output, expected.selectCSV("id, wkt, poi_id"))
+  }
+
   // TODO:
-  //  predicate: +withindist, +within, +contains, intersects, overlaps, +nearest;
+  //  predicate: +withindist, +within, +contains, +intersects, overlaps, +nearest;
   //  broadcast: input, dataset;
   //  filter;
   //  condition
@@ -285,6 +317,7 @@ class BroadcastSpatialJoinTest extends
 }
 
 object BroadcastSpatialJoinTest {
+
   case class PointID(id: String, lon: Double, lat: Double)
   case class PoiID(poi_id: String, lon: Double, lat: Double, name: Option[String] = None)
   case class PointPoi(id: String, lon: Double, lat: Double, poi_id: String, name: Option[String] = None)
@@ -339,6 +372,7 @@ object BroadcastSpatialJoinTest {
     text.splitTrim("\n").map(_.splitTrim(sep))
 
   implicit class RichDataset(val ds: Dataset[_]) extends AnyVal {
+
     def selectCSV(csv: String): DataFrame = {
       val cols = csv.splitTrim(",")
       ds.selectExpr(cols: _*)
