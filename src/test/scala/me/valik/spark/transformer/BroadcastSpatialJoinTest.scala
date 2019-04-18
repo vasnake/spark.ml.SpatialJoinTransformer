@@ -172,10 +172,42 @@ class BroadcastSpatialJoinTest extends
       "id, wkt, poi_id"))
   }
 
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "dataset WKT"
+  it should "parse dataset WKT" in {
+    import spark.implicits._
+
+    val input = parsePointID(
+      """
+        |i1, 1.4, 1.4
+        |i2, 1.6, 1.6
+      """.stripMargin).toDS
+
+    val data = parseWKTPoiID(
+      """
+        |d1; POLYGON((1 1,2 1,1 2,1 1))
+        |d2; POLYGON((2 1,2 2,1 2,2 1))
+      """.stripMargin).toDS
+
+    val expected = parsePointPoi(
+      """
+        |i1, 1.4, 1.4, d1
+        |i2, 1.6, 1.6, d2
+      """.stripMargin).toDS
+
+    val transformer = makeTransformer(data.toDF)
+      .setDatasetPoint("")
+      .setDatasetWKT("wkt")
+      .setPredicate("contains") // data polygon contains input point (broadcast input)
+    val output = transformer.transform(input)
+
+    output.show(20, truncate=false)
+    assertDataFrameEquals(output, expected.selectCSV(
+      "id, lon, lat, poi_id"))
+  }
+
   // TODO:
-  //  datasetPoint/datasetWKT;
   //  dataColumns (1,2,...)
-  //  predicate: withindist, +within, contains, intersects, overlaps, +nearest;
+  //  predicate: withindist, +within, +contains, intersects, overlaps, +nearest;
   //  broadcast: input, dataset;
   //  filter;
   //  condition
@@ -184,10 +216,16 @@ class BroadcastSpatialJoinTest extends
 
 object BroadcastSpatialJoinTest {
   case class PointID(id: String, lon: Double, lat: Double)
-  case class WKTPointID(id: String, wkt: String)
   case class PoiID(poi_id: String, lon: Double, lat: Double, name: Option[String] = None)
   case class PointPoi(id: String, lon: Double, lat: Double, poi_id: String, name: Option[String] = None)
+  case class WKTPointID(id: String, wkt: String)
+  case class WKTPoiID(poi_id: String, wkt: String, name: Option[String] = None)
   case class WKTPointPoi(id: String, wkt: String, poi_id: String, name: Option[String] = None)
+
+  // one line example: "d1; POLYGON((1 1,2 1,1 2,1 1))"
+  def parseWKTPoiID(text: String): Seq[WKTPoiID] = for {
+    Array(k, wkt, rest @ _*) <- parseColumns(text, ";")
+  } yield WKTPoiID(k, wkt, rest.headOption)
 
   // one line example: "i1; POLYGON((1 1,2 1,1 2,1 1))"
   def parseWKTPointID(text: String): Seq[WKTPointID] = for {
