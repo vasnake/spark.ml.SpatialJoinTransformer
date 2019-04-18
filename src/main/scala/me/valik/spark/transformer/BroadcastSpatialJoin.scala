@@ -88,6 +88,11 @@ class BroadcastSpatialJoin(override val uid: String) extends
   setDefault(dataColumns, "")
   def setDataColumns(value: String): this.type = set(dataColumns, value)
 
+  /**
+    * If set to non-empty string, distance between input geometry centroid and
+    * dataset geometry centroid will be added as last column.
+    * Distance is Int meters.
+    */
   final val distanceColumnAlias = new Param[String](this, "distanceColumnAlias", "alias for added `distance` column")
   setDefault(distanceColumnAlias, "")
   def setDistColAlias(value: String): this.type = set(distanceColumnAlias, value)
