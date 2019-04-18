@@ -22,16 +22,20 @@ import scala.util.Try
   *
   * <br/><br/>
   * `input` aka `input dataset`: DataFrame to which transformer is applied, e.g.
-  * result = bsj.transform(input)
+  * result = bsj.transform(input).
   * <br/><br/>
-  * `dataset` aka `external dataset`: DataFrame (table or view) registered in spark sql metastore
-  * (or hive metastore); e.g. data.createOrReplaceTempView("poi_with_wkt_geometry")
+  * `dataset` aka `external dataset` aka `external`: DataFrame (table or view) registered in spark sql metastore
+  * (or hive metastore); e.g. data.createOrReplaceTempView("poi_with_wkt_geometry").
   * <br/><br/>
-  * `broadcast`, `setBroadcast`: current limitation is that transformer using the BroadcastSpatialJoin module
-  * required that one of the datasets must be broadcasted. It means that `input` or `external`
-  * must be small enough to be broadcasted by spark.
+  * `broadcast`, `setBroadcast`: current limitation is that transformer perform join using the
+  * BroadcastSpatialJoin module that require that one of the datasets must be broadcasted.
+  * It means that one of the `input` or `external` must be small enough to be broadcasted by spark.
   * By default `input` will be broadcasted and `external` will be iterated using flatMap to find
-  * all the records from `input` that satisfy spatial relation (with `filter` and `condition`)
+  * all the records from `input` that satisfy spatial relation (with `filter` and `condition`).
+  * `broadcast` parameter and `predicate` parameter together defines result of join. For example,
+  * consider input that have two rows (2 points) and dataset that have four rows (4 points).
+  * Let's set predicate to the `nearest`. By default, input will be broadcasted and that means that
+  * result table will have four rows: nearest point from input for each point from external dataset.
   * <br/><br/>
   * `left` or `right` dataset: the join process looks like we iterate (flatMap) over `left`
   * dataset and, for each left.row we search for rows in `right` dataset that satisfy

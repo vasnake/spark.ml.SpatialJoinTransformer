@@ -113,8 +113,33 @@ class BroadcastSpatialJoinTest extends
       "id, lon, lat, poi_id, int(name) as distance"))
   }
 
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "repartition"
+  it should "repartition external dataset" in {
+    import spark.implicits._
+
+    val input = parsePointID(
+      """
+        |i1, 1, 1
+        |i2, 2, 2
+      """.stripMargin).toDS
+
+    val data = parsePoiID(
+      """
+        |d1, 1.1, 1.1
+        |d2, 2.1, 2.1
+        |d3, 3.1, 3.1
+        |d4, 4.1, 4.1
+      """.stripMargin).toDS
+
+    val transformer = makeTransformer(data.toDF)
+      .setNumPartitions("4")
+    val output = transformer.transform(input)
+
+    output.show(20, truncate=false)
+    assert(output.rdd.getNumPartitions === 4)
+  }
+
   // TODO:
-  //  num.partitions;
   //  inputPoint/inputWKT;
   //  datasetPoint/datasetWKT;
   //  dataColumns (1,2,...)
