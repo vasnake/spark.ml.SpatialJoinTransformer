@@ -245,8 +245,39 @@ class BroadcastSpatialJoinTest extends
     onlyOne
   }
 
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "withindist"
+  it should "use withindist predicate" in {
+    import spark.implicits._
+
+    val input = parsePointID(
+      """
+        |i1, 1, 1
+        |i2, 2, 2
+      """.stripMargin).toDS
+
+    val data = parsePoiID(
+      """
+        |d1, 1.1, 1.1
+        |d2, 2.1, 2.1
+        |d3, 2.101, 2.101
+      """.stripMargin).toDS
+
+    val expected = parsePointPoi(
+      """
+        |i1, 1, 1, d1
+        |i2, 2, 2, d2
+      """.stripMargin).toDS
+
+    val transformer = makeTransformer(data.toDF)
+      .setPredicate("withindist 15700")
+    val output = transformer.transform(input)
+
+    output.show(20, truncate=false)
+    assertDataFrameEquals(output, expected.selectPP)
+  }
+
   // TODO:
-  //  predicate: withindist, +within, +contains, intersects, overlaps, +nearest;
+  //  predicate: +withindist, +within, +contains, intersects, overlaps, +nearest;
   //  broadcast: input, dataset;
   //  filter;
   //  condition

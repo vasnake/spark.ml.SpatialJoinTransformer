@@ -299,10 +299,10 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     def postprocess(dscols: Row, incols: Row, dsgeom: Geometry, ingeom: Geometry
     ): Option[(Row, Row, Int)] = {
       // calc distance if needed: meters between centroids
-      def distance: Int = {
+      lazy val distance: Int =
         if (filterByDist || needDistance) geoDistance(dsgeom, ingeom)
         else 0
-      }
+
       // filter by distance if required
       if (filterByDist && distance > radius) None
       else Some((dscols, incols, distance))
