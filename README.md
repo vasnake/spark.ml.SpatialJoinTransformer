@@ -76,13 +76,60 @@ More information about Spark transformers you can find in
 [documentation](https://spark.apache.org/docs/latest/ml-pipeline.html)
 
 ### Transformer parameters
-???
+All parameters are String parameters.
+
+condition, setJoinCondition
+:  experimental feature, it should be possible to apply extra filter to (input.row, dataset.row) pair
+found as a join candidates by spatial relation. e.g. `fulldate between start_ts and end_ts`
+
+filter, setDatasetFilter
+:  SQL expression passed to load `dataset` method in case you need to apply filtering before join.
+
+broadcast, setBroadcast
+:  which dataset will be broadcasted, two possible values: `input` or `external`,
+by default it will be `input`.
+
+predicate, setPredicate
+:  one of supported spatial relations: `within`, `contains`, `intersects`, `overlaps`, `nearest`.
+By default it will be `nearest`.
+Operator `within` should be used in form of `within n` where `n` is a distance parameter in meters.
+
+n.b. `broadcast` and `predicate` closely related: `broadcast` defines a `right` dataset and then
+spatial relation can be interpreted as "left contains right" if `predicate` is `contains` for example.
+
+dataset, setDataset
+:  external dataset name, should be registered in SQL catalog (metastore).
+
+dataColumns, setDataColumns
+:  column names from `dataset` you need to join to `input`.
+Format: CSV. Any column could be renamed using alias, using " as alias" form.
+For example: `t.setDataColumns("poi_id, name as poi_name"")`
+
+distanceColumnAlias, setDistColAlias
+:  if not empty, computable column with defined name will be added to `input`.
+That column will contain distance (meters) between centroids of `input` and `dataset` geometries.
+
+datasetWKT, setDatasetWKT
+:  external dataset column name, if not empty that column must contain geometry definition in WKT format.
+
+datasetPoint, setDatasetPoint
+:  two column names for external dataset, if not empty that columns must contain
+Lon, Lat (exactly in that order) coordinates for point geometry.
+
+Same goes for inputWKT, setInputWKT and
+inputPoint, setInputPoint
+
+N.b. you should define only one source for geometry objects, it's a WKT or Point, not both.
+
+numPartitions, setNumPartitions
+:  repartition parameter, in case if you want to repartition `external dataset`
+before join.
 
 ## Notes and limitations
 
 Transformer allows you to join input dataset with selected external dataset
 using spatial relations between two geometry columns (or four columns in case of
-lon, lat points). As any other join, it allows you to add selected columns 
+lon, lat points). As any other join, it allows you to add selected columns
 (and computable `distance` column) from external dataset to input dataset.
 
 Only inner join implemented for now.
@@ -110,7 +157,7 @@ all the records from `input` that satisfy spatial relation (with `filter` and `c
 `broadcast` parameter and `predicate` parameter together defines result of join.
 For example, consider input that have two rows (2 points) and dataset that have four rows (4 points).
 Let's set predicate to the `nearest`. 
-By default, input will be broadcasted and that means that result table will have four rows: 
+By default, input will be broadcasted and that means that result table will have four rows:
 nearest point from input for each point from external dataset.
 
 left or right dataset

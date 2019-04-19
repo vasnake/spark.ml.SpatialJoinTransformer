@@ -1,12 +1,6 @@
 // me.valik.spark %% spark-transformer-spatialjoin % 0.0.1
 // me.valik.spark.transformer.BroadcastSpatialJoin
 
-// plan:
-//    readme, tag, release
-//    python wrapper
-//    integration tests (IT)
-//    E2E tests
-
 val Organization = "me.valik.spark"
 val Name = "spark-transformer-spatialjoin"
 val Version = "0.0.1"
