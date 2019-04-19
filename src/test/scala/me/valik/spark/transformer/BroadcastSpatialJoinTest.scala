@@ -406,8 +406,54 @@ class BroadcastSpatialJoinTest extends
     assertDataFrameEquals(output, expected.selectPP)
   }
 
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "filter"
+  it should "apply filter on data loading" in {
+    import spark.implicits._
+
+    val input = parsePointID(
+      """
+        |i1, 1, 1
+        |i2, 2, 2
+      """.stripMargin).toDS
+
+    val data = parsePoiID(
+      """
+        |d1, 1.1, 1.1, a
+        |d2, 2.1, 2.1, b
+        |d3, 3.1, 3.1, c
+      """.stripMargin).toDS
+
+    val expected = parsePointPoi(
+      """
+        |i1, 1, 1, d1
+        |i2, 2, 2, d2
+      """.stripMargin).toDS
+
+    def noFilter = {
+      val expected = parsePointPoi(
+        """
+          |i1, 1, 1, d1
+          |i2, 2, 2, d2
+          |i2, 2, 2, d3
+        """.stripMargin).toDS
+      val transformer = makeTransformer(data.toDF)
+      val output = transformer.transform(input)
+      output.show(20, truncate=false)
+      assertDataFrameEquals(output, expected.selectPP)
+    }
+
+    //by default: for each dataset row find nearest point in broadcasted input
+    val transformer = makeTransformer(data.toDF)
+      .setDatasetFilter("name in ('a', 'b')")
+    val output = transformer.transform(input)
+
+    output.show(20, truncate=false)
+    assertDataFrameEquals(output, expected.selectPP)
+
+    noFilter
+  }
+
   // TODO:
-  //  filter;
   //  condition
   //  transformSchema
 }
