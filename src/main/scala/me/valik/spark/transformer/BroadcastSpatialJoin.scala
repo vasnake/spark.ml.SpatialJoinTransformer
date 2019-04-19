@@ -22,16 +22,20 @@ import scala.util.Try
   *
   * <br/><br/>
   * `input` aka `input dataset`: DataFrame to which transformer is applied, e.g.
-  * result = bsj.transform(input)
+  * result = bsj.transform(input).
   * <br/><br/>
-  * `dataset` aka `external dataset`: DataFrame (table or view) registered in spark sql metastore
-  * (or hive metastore); e.g. data.createOrReplaceTempView("poi_with_wkt_geometry")
+  * `dataset` aka `external dataset` aka `external`: DataFrame (table or view) registered in spark sql metastore
+  * (or hive metastore); e.g. data.createOrReplaceTempView("poi_with_wkt_geometry").
   * <br/><br/>
-  * `broadcast`, `setBroadcast`: current limitation is that transformer using the BroadcastSpatialJoin module
-  * required that one of the datasets must be broadcasted. It means that `input` or `external`
-  * must be small enough to be broadcasted by spark.
+  * `broadcast`, `setBroadcast`: current limitation is that transformer perform join using the
+  * BroadcastSpatialJoin module that require that one of the datasets must be broadcasted.
+  * It means that one of the `input` or `external` must be small enough to be broadcasted by spark.
   * By default `input` will be broadcasted and `external` will be iterated using flatMap to find
-  * all the records from `input` that satisfy spatial relation (with `filter` and `condition`)
+  * all the records from `input` that satisfy spatial relation (with `filter` and `condition`).
+  * `broadcast` parameter and `predicate` parameter together defines result of join. For example,
+  * consider input that have two rows (2 points) and dataset that have four rows (4 points).
+  * Let's set predicate to the `nearest`. By default, input will be broadcasted and that means that
+  * result table will have four rows: nearest point from input for each point from external dataset.
   * <br/><br/>
   * `left` or `right` dataset: the join process looks like we iterate (flatMap) over `left`
   * dataset and, for each left.row we search for rows in `right` dataset that satisfy
@@ -79,15 +83,21 @@ class BroadcastSpatialJoin(override val uid: String) extends
   setDefault(dataset, "")
   def setDataset(value: String): this.type = set(dataset, value)
 
+  /**
+    * External dataset columns required to join to input dataset.
+    * Column can be renamed after join, in that case add ` as alias` to col.name.
+    * Provide a list in form of CSV, e.g. `id as poi_id, name`
+    */
   final val dataColumns = new Param[String](this, "dataColumns", "external ds column names to join to input, in csv format")
   setDefault(dataColumns, "")
   def setDataColumns(value: String): this.type = set(dataColumns, value)
 
-  final val dataColumnAliases = new Param[String](this, "dataColumnAliases", "aliases for added data columns, in csv format")
-  setDefault(dataColumnAliases, "")
-  def setDataColAlias(value: String): this.type = set(dataColumnAliases, value)
-
-  final val distanceColumnAlias = new Param[String](this, "distanceColumnAlias", "alias for added distance column")
+  /**
+    * If set to non-empty string, distance between input geometry centroid and
+    * dataset geometry centroid will be added as last column.
+    * Distance is Int meters.
+    */
+  final val distanceColumnAlias = new Param[String](this, "distanceColumnAlias", "alias for added `distance` column")
   setDefault(distanceColumnAlias, "")
   def setDistColAlias(value: String): this.type = set(distanceColumnAlias, value)
 
@@ -126,6 +136,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
   // config
 
   @transient private var config: Option[TransformerConfig] = None
+  @transient implicit val self = this
 
   protected def getConfig(spark: SparkSession): TransformerConfig = {
     config.getOrElse({
@@ -150,10 +161,10 @@ class BroadcastSpatialJoin(override val uid: String) extends
         s"${name}Point property should be empty or contain string like 'lon, lat'")
     }
 
-    checkGeomCols($(datasetWKT).trim, $(datasetPoint).trim, "dataset")
-    checkGeomCols($(inputWKT).trim, $(inputPoint).trim, "input")
+    checkGeomCols(datasetWKT.get, datasetPoint.get, "dataset")
+    checkGeomCols(inputWKT.get, inputPoint.get, "input")
 
-    require($(dataset).trim.nonEmpty, "dataset property must contain table or view name")
+    require(dataset.get.nonEmpty, "dataset property must contain table or view name")
     require($(dataColumns).splitTrim.length > 0,
       "dataColumns property must contain at least one column name")
   }
@@ -166,48 +177,49 @@ class BroadcastSpatialJoin(override val uid: String) extends
       PointColumns(lon, lat)
     }.getOrElse(PointColumns("", ""))
 
-    val dataCols: Seq[String] = $(dataColumns).splitTrim
+    val (dataCols, dataColAliases) = {
+      import DefaultSeparators.stringToSeparators
+      // convert "id as poi_id, name" to ((id, poi_id), (name, name))
+      val cols = $(dataColumns).splitTrim
+      val pairs = for (Array(name, alias @ _*) <- cols.map(_.splitTrim("as")))
+        yield (name, alias.headOption.getOrElse(name))
+      // separate names and aliases
+      (pairs.map(_._1), pairs.map(_._2))
+    }
 
     val ds = { // external dataset, filtered and projected
-      val conditionCols: Seq[String] = extraConditionColumns($(condition))
+      val conditionCols: Seq[String] = extraConditionColumns(condition.get)
       val cols = (dataCols ++
-        Seq($(datasetWKT)) ++
+        Seq(datasetWKT.get) ++
         $(datasetPoint).splitTrim ++
         conditionCols
         ).filter(_.nonEmpty).toSet.toList
 
-      val df: DataFrame = loadDataset($(dataset), spark)
-      val fltr = $(filter).trim
+      val df: DataFrame = loadDataset(dataset.get, spark)
+      val fltr = filter.get
       val filtered = if (fltr.nonEmpty) df.filter(fltr) else df
 
       val projected = filtered.select(cols.head, cols.tail: _*)
       Try {
-        projected.repartition($(numPartitions).trim.toInt)
+        projected.repartition(numPartitions.get.toInt)
       }.getOrElse(projected)
     }
 
-    val dataColAliases: Seq[String] = {
-      val dca = $(dataColumnAliases).splitTrim
-      dataCols.zipWithIndex.map { case (name, idx) =>
-        // find alias by index or use name as alias
-        dca.applyOrElse(idx, (_: Int) => name)
-      } }
-
     TransformerConfig(
       ExternalDatasetConfig(
-        name = $(dataset),
+        name = dataset.get,
         df = ds,
-        wktColumn = $(datasetWKT),
-        parsePointColumns($(datasetPoint)),
+        wktColumn = datasetWKT.get,
+        parsePointColumns(datasetPoint.get),
         dataCols,
         dataColAliases),
       InputDatasetConfig(
-        wktColumn = $(inputWKT),
-        parsePointColumns($(inputPoint))),
-      $(distanceColumnAlias),
-      spatialPredicate = $(predicate),
-      extraPredicate = $(condition),
-      broadcastInput = $(broadcast) == input
+        wktColumn = inputWKT.get,
+        parsePointColumns(inputPoint.get)),
+      distanceColumnAlias.get,
+      spatialPredicate = predicate.get,
+      extraPredicate = condition.get,
+      broadcastInput = broadcast.get == input
     )
   }
 
@@ -226,7 +238,22 @@ class BroadcastSpatialJoin(override val uid: String) extends
     val emptyRows = spark.sparkContext.emptyRDD[Row]
     val emptyInput = spark.createDataFrame(emptyRows, schema)
 
-    transform(emptyInput).schema
+    emptyTransform(emptyInput).schema
+  }
+
+  /**
+    * optimization hack: minimize data processing
+    */
+  private def emptyTransform(emptyInput: DataFrame): DataFrame = {
+    val conf = getConfig(emptyInput.sparkSession)
+    val emptydf = conf.datasetCfg.df.limit(1)
+    // set external dataset to empty df
+    config = Some(conf.copy(datasetCfg=conf.datasetCfg.copy(df=emptydf)))
+    val res = transform(emptyInput)
+    // restore config
+    config = Some(conf)
+
+    res
   }
 
   override def transform(inputDS: Dataset[_]): DataFrame = {
@@ -251,6 +278,9 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
   type ExtraConditionFunc = (Row, Row) => Boolean
 
+  implicit class StringParam(val p: Param[String]) extends AnyVal {
+    def get(implicit owner: Params): String = owner.getOrDefault(p).trim
+  }
 
   /**
     * transformer debug tool
@@ -284,10 +314,10 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     def postprocess(dscols: Row, incols: Row, dsgeom: Geometry, ingeom: Geometry
     ): Option[(Row, Row, Int)] = {
       // calc distance if needed: meters between centroids
-      def distance: Int = {
+      lazy val distance: Int =
         if (filterByDist || needDistance) geoDistance(dsgeom, ingeom)
         else 0
-      }
+
       // filter by distance if required
       if (filterByDist && distance > radius) None
       else Some((dscols, incols, distance))
@@ -326,9 +356,6 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
       }
     }
 
-    // column added after spatial join
-    val distColName = Identifiable.randomUID("distance")
-
     // convert rdd to dataframe, select required fields
     val crosstabDF: DataFrame = {
       val datasetColNames = dataset.schema.fields.map(_.name)
@@ -337,8 +364,13 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
       val schema = {
         val selectedFields = dataset.schema.fields
           .filter(f => selectedNames.contains(f.name ))
-        val fields: Seq[StructField] = input.schema.fields ++ selectedFields
-        if (needDistance) StructType(fields :+ StructField(distColName, DataTypes.IntegerType))
+
+        val selectedNameAlias = (config.datasetCfg.dataColumns zip config.datasetCfg.aliases).toMap
+
+        val fields: Seq[StructField] = input.schema.fields ++
+          selectedFields.map(f => f.copy(name=selectedNameAlias(f.name)))
+
+        if (needDistance) StructType(fields :+ StructField(config.distanceColumnAlias, DataTypes.IntegerType))
         else StructType(fields)
       }
 
@@ -356,6 +388,8 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
       spark.createDataFrame(rdd, schema)
     }
+    // debug
+    show(crosstabDF, s"join result parts ${crosstabDF.rdd.getNumPartitions}")
 
     crosstabDF
   }
@@ -405,6 +439,7 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     * Produce filter function to push down to spatial join.
     * Join direction (broadcast input or external dataset) must be set
     * accordingly to the predicate.
+    * Broadcasted dataset will be considered as `right`.
     *
     * @param predicate predefined string, one of:
     *                  {{{
@@ -430,6 +465,8 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
   protected def parseExtraCondition(predicate: String): Option[ExtraCondition] = {
     // TODO: parse sql-like statement and produce function dynamically
+    // right: dataset marked to broadcast, input by default;
+    // left: dataset to be iterated, external dataset by default;
     predicate.toLowerCase match {
       case "right.fulldate_ts between left.start_ts and left.end_ts" => Some(
         ExtraCondition(
@@ -439,6 +476,14 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
             val bts = left.getAs[Long]("start_ts")
             val ets = left.getAs[Long]("end_ts")
             bts <= ut && ut <= ets
+          }) )
+      case "right.id != left.name" => Some(
+        ExtraCondition(
+          columns = Seq("name"),
+          func = (left, right) => {
+            val id = right.getAs[String]("id")
+            val name = left.getAs[String]("name")
+            id != name
           }) )
       case "" => None
       case x => throw new IllegalArgumentException(s"Spatial join transformer error: unknown extra condition `$x`")

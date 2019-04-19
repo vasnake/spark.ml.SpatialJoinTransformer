@@ -1,7 +1,7 @@
 import sbt._
 
 object Versions {
-  val spatialSpark = "spark2.4-scala2.12"
+  val spatialSpark = "broadcast-spatial-join"
 }
 
 object Projects {
