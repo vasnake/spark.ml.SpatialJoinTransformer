@@ -388,6 +388,8 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
       spark.createDataFrame(rdd, schema)
     }
+    // debug
+    show(crosstabDF, s"join result parts ${crosstabDF.rdd.getNumPartitions}")
 
     crosstabDF
   }

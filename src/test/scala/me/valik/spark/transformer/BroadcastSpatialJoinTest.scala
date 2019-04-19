@@ -35,7 +35,7 @@ class BroadcastSpatialJoinTest extends
     val transformer = makeTransformer(data.toDF)
     val output = transformer.transform(input) // .persist(StorageLevel.MEMORY_ONLY)
 
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectPP)
   }
 
@@ -65,8 +65,7 @@ class BroadcastSpatialJoinTest extends
       val transformer = makeTransformer(data.toDF)
         .setDataColumns("poi_id as poi_number, name")
       val output = transformer.transform(input)
-
-      output.show(20, truncate=false)
+      //output.show(20, truncate=false)
       assertDataFrameEquals(output, expected.selectCSV(
         "id, lon, lat, poi_id as poi_number, name"))
     }
@@ -74,8 +73,7 @@ class BroadcastSpatialJoinTest extends
     val transformer = makeTransformer(data.toDF)
       .setDataColumns("poi_id as poi_number, name as poi_name")
     val output = transformer.transform(input)
-
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectCSV(
       "id, lon, lat, poi_id as poi_number, name as poi_name"))
 
@@ -107,8 +105,7 @@ class BroadcastSpatialJoinTest extends
     val transformer = makeTransformer(data.toDF)
       .setDistColAlias("distance")
     val output = transformer.transform(input)
-
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectCSV(
       "id, lon, lat, poi_id, int(name) as distance"))
   }
@@ -134,8 +131,7 @@ class BroadcastSpatialJoinTest extends
     val transformer = makeTransformer(data.toDF)
       .setNumPartitions("4")
     val output = transformer.transform(input)
-
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assert(output.rdd.getNumPartitions === 4)
   }
 
@@ -166,8 +162,7 @@ class BroadcastSpatialJoinTest extends
       .setInputWKT("wkt")
       .setPredicate("within") // data point within input polygon (broadcast input)
     val output = transformer.transform(input)
-
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectCSV(
       "id, wkt, poi_id"))
   }
@@ -199,8 +194,7 @@ class BroadcastSpatialJoinTest extends
       .setDatasetWKT("wkt")
       .setPredicate("contains") // data polygon contains input point (broadcast input)
     val output = transformer.transform(input)
-
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectCSV(
       "id, lon, lat, poi_id"))
   }
@@ -231,15 +225,14 @@ class BroadcastSpatialJoinTest extends
       val transformer = makeTransformer(data.toDF)
         .setDataColumns("name")
       val output = transformer.transform(input)
-      output.show(20, truncate=false)
+      //output.show(20, truncate=false)
       assertDataFrameEquals(output, expected.selectCSV("id, lon, lat, name"))
     }
 
     val transformer = makeTransformer(data.toDF)
       .setDataColumns("poi_id, name")
     val output = transformer.transform(input)
-
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.toDF)
 
     onlyOne
@@ -271,8 +264,7 @@ class BroadcastSpatialJoinTest extends
     val transformer = makeTransformer(data.toDF)
       .setPredicate("withindist 15700")
     val output = transformer.transform(input)
-
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectPP)
   }
 
@@ -303,8 +295,7 @@ class BroadcastSpatialJoinTest extends
       .setInputPoint("").setInputWKT("wkt")
       .setDatasetPoint("").setDatasetWKT("wkt")
     val output = transformer.transform(input)
-
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectCSV("id, wkt, poi_id"))
   }
 
@@ -335,8 +326,7 @@ class BroadcastSpatialJoinTest extends
       .setInputPoint("").setInputWKT("wkt")
       .setDatasetPoint("").setDatasetWKT("wkt")
     val output = transformer.transform(input)
-
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectCSV("id, wkt, poi_id"))
   }
 
@@ -368,8 +358,7 @@ class BroadcastSpatialJoinTest extends
       .setBroadcast("dataset")
       .setPredicate("nearest") // for each input row find nearest point in broadcasted dataset
     val output = transformer.transform(input)
-
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectPP)
   }
 
@@ -401,8 +390,7 @@ class BroadcastSpatialJoinTest extends
       .setBroadcast("input")
       .setPredicate("nearest") // for each dataset row find nearest point in broadcasted input
     val output = transformer.transform(input)
-
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectPP)
   }
 
@@ -438,7 +426,7 @@ class BroadcastSpatialJoinTest extends
         """.stripMargin).toDS
       val transformer = makeTransformer(data.toDF)
       val output = transformer.transform(input)
-      output.show(20, truncate=false)
+      //output.show(20, truncate=false)
       assertDataFrameEquals(output, expected.selectPP)
     }
 
@@ -446,8 +434,7 @@ class BroadcastSpatialJoinTest extends
     val transformer = makeTransformer(data.toDF)
       .setDatasetFilter("name in ('a', 'b')")
     val output = transformer.transform(input)
-
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectPP)
 
     noFilter
@@ -483,7 +470,7 @@ class BroadcastSpatialJoinTest extends
       .setJoinCondition("right.id != left.name") // input.id != dataset.name
 
     val output = transformer.transform(input)
-    output.show(20, truncate=false)
+    //output.show(20, truncate=false)
     assertDataFrameEquals(output, expected.selectPP)
 
     def noCondition = {
@@ -495,7 +482,7 @@ class BroadcastSpatialJoinTest extends
         """.stripMargin).toDS
       val transformer = makeTransformer(data.toDF)
       val output = transformer.transform(input)
-      output.show(20, truncate=false)
+      //output.show(20, truncate=false)
       assertDataFrameEquals(output, expected.selectPP)
     }
   }
