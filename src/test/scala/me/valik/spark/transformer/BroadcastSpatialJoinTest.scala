@@ -340,8 +340,73 @@ class BroadcastSpatialJoinTest extends
     assertDataFrameEquals(output, expected.selectCSV("id, wkt, poi_id"))
   }
 
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "broadcast dataset"
+  it should "broadcast dataset" in {
+    import spark.implicits._
+
+    val input = parsePointID(
+      """
+        |i1, 1, 1
+        |i2, 2, 2
+        |i3, 3, 3
+      """.stripMargin).toDS
+
+    val data = parsePoiID(
+      """
+        |d1, 1.1, 1.1
+        |d2, 2.1, 2.1
+      """.stripMargin).toDS
+
+    val expected = parsePointPoi(
+      """
+        |i1, 1, 1, d1
+        |i2, 2, 2, d2
+        |i3, 3, 3, d2
+      """.stripMargin).toDS
+
+    val transformer = makeTransformer(data.toDF)
+      .setBroadcast("dataset")
+      .setPredicate("nearest") // for each input row find nearest point in broadcasted dataset
+    val output = transformer.transform(input)
+
+    output.show(20, truncate=false)
+    assertDataFrameEquals(output, expected.selectPP)
+  }
+
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "broadcast input"
+  it should "broadcast input" in {
+    import spark.implicits._
+
+    val input = parsePointID(
+      """
+        |i1, 1, 1
+        |i2, 2, 2
+      """.stripMargin).toDS
+
+    val data = parsePoiID(
+      """
+        |d1, 1.1, 1.1
+        |d2, 2.1, 2.1
+        |d3, 3.1, 3.1
+      """.stripMargin).toDS
+
+    val expected = parsePointPoi(
+      """
+        |i1, 1, 1, d1
+        |i2, 2, 2, d2
+        |i2, 2, 2, d3
+      """.stripMargin).toDS
+
+    val transformer = makeTransformer(data.toDF)
+      .setBroadcast("input")
+      .setPredicate("nearest") // for each dataset row find nearest point in broadcasted input
+    val output = transformer.transform(input)
+
+    output.show(20, truncate=false)
+    assertDataFrameEquals(output, expected.selectPP)
+  }
+
   // TODO:
-  //  broadcast: input, dataset;
   //  filter;
   //  condition
   //  transformSchema
