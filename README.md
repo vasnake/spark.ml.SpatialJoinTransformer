@@ -78,50 +78,51 @@ More information about Spark transformers you can find in
 ### Transformer parameters
 All parameters are String parameters.
 
-condition, setJoinCondition
+`condition, setJoinCondition`
 :  experimental feature, it should be possible to apply extra filter to (input.row, dataset.row) pair
 found as a join candidates by spatial relation. e.g. `fulldate between start_ts and end_ts`
 
-filter, setDatasetFilter
+`filter, setDatasetFilter`
 :  SQL expression passed to load `dataset` method in case you need to apply filtering before join.
 
-broadcast, setBroadcast
+`broadcast, setBroadcast`
 :  which dataset will be broadcasted, two possible values: `input` or `external`,
 by default it will be `input`.
 
-predicate, setPredicate
-:  one of supported spatial relations: `within`, `contains`, `intersects`, `overlaps`, `nearest`.
+`predicate, setPredicate`
+:  one of supported spatial relations:
+`withindist`, `within`, `contains`, `intersects`, `overlaps`, `nearest`.
 By default it will be `nearest`.
-Operator `within` should be used in form of `within n` where `n` is a distance parameter in meters.
+Operator `withindist` should be used in form of `withindist n`
+where `n` is a distance parameter in meters.
 
-n.b. `broadcast` and `predicate` closely related: `broadcast` defines a `right` dataset and then
+n.b. `broadcast` and `predicate` are closely related: `broadcast` defines a `right` dataset and then
 spatial relation can be interpreted as "left contains right" if `predicate` is `contains` for example.
 
-dataset, setDataset
+`dataset, setDataset`
 :  external dataset name, should be registered in SQL catalog (metastore).
 
-dataColumns, setDataColumns
+`dataColumns, setDataColumns`
 :  column names from `dataset` you need to join to `input`.
 Format: CSV. Any column could be renamed using alias, using " as alias" form.
-For example: `t.setDataColumns("poi_id, name as poi_name"")`
+For example: `t.setDataColumns("poi_id, name as poi_name")`
 
-distanceColumnAlias, setDistColAlias
+`distanceColumnAlias, setDistColAlias`
 :  if not empty, computable column with defined name will be added to `input`.
 That column will contain distance (meters) between centroids of `input` and `dataset` geometries.
 
-datasetWKT, setDatasetWKT
+`datasetWKT, setDatasetWKT`
 :  external dataset column name, if not empty that column must contain geometry definition in WKT format.
 
-datasetPoint, setDatasetPoint
-:  two column names for external dataset, if not empty that columns must contain
+`datasetPoint, setDatasetPoint`
+:  two column names from external dataset, if not empty that columns must contain
 Lon, Lat (exactly in that order) coordinates for point geometry.
 
-Same goes for inputWKT, setInputWKT and
-inputPoint, setInputPoint
+Same goes for `inputWKT, setInputWKT` and `inputPoint, setInputPoint`
 
 N.b. you should define only one source for geometry objects, it's a WKT or Point, not both.
 
-numPartitions, setNumPartitions
+`numPartitions, setNumPartitions`
 :  repartition parameter, in case if you want to repartition `external dataset`
 before join.
 
