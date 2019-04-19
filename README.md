@@ -44,12 +44,12 @@ and some `external dataset` aka just `dataset`.
 To perform a transformation, spatial join exactly, we need these datasets
 to have spatial information.
 Each dataset have to have a column with WKT geometries or, in case of points,
-two columns with Longitude and Latitude coordinates of points.
+two columns with Longitude and Latitude coordinates.
 
 Another requirement: `extenal dataset` must be registered in Spark SQL metastore/catalog.
-It can be Hive table or some previously registered view/table.
+It can be Hive table or some previously registered DataFrame.
 
-Shortest possible example: `external dataset` registered with name `poi` and
+Shortest possible example: `external dataset` registered with name `poi` that
 has point geometry columns: `lon`, `lat`.
 Dataset to transform, `input` also has point geometry, also located in columns `lon` and `lat`:
 
@@ -75,4 +75,52 @@ More detailed examples with different parameters, conditions and predicates you 
 More information about Spark transformers you can find in
 [documentation](https://spark.apache.org/docs/latest/ml-pipeline.html)
 
+### Transformer parameters
+???
+
 ## Notes and limitations
+
+Transformer allows you to join input dataset with selected external dataset
+using spatial relations between two geometry columns (or four columns in case of
+lon, lat points). As any other join, it allows you to add selected columns 
+(and computable `distance` column) from external dataset to input dataset.
+
+Only inner join implemented for now.
+
+geometry
+:  spatial data defined as column containing WKT-formatted primitives: points, polylines, polygons;
+WGS84 coordinate system expected (lon,lat decimal degrees GPS coordinates).
+Points can be represented as two columns: (lon, lat).
+
+input aka input dataset
+:  DataFrame to which transformer is applied, e.g.
+`val result = bsj.transform(input)`
+
+dataset aka external dataset aka external
+:  DataFrame (table or view) registered in spark sql catalog
+(or hive metastore); e.g. `data.createOrReplaceTempView("poi_with_wkt_geometry")`
+
+broadcast aka setBroadcast parameter
+:  current limitation is that transformer perform join using the
+BroadcastSpatialJoin module that require one of the datasets to be broadcasted.
+It means that one of the `input` or `external` datasets must be small enough to be broadcasted by Spark.
+By default `input` will be broadcasted and `external` will be iterated using flatMap to find
+all the records from `input` that satisfy spatial relation (with `filter` and `condition`).
+
+`broadcast` parameter and `predicate` parameter together defines result of join.
+For example, consider input that have two rows (2 points) and dataset that have four rows (4 points).
+Let's set predicate to the `nearest`. 
+By default, input will be broadcasted and that means that result table will have four rows: 
+nearest point from input for each point from external dataset.
+
+left or right dataset
+:  `broadcast` parameter defines which dataset will be considered `right` and the other, accordingly, `left`.
+By default, `input` will be broadcasted, which means, `input` will be the `right` dataset and
+`external dataset` will be `left`.
+
+The join process looks like iteration (flatMap) over `left` dataset and, for each left.row 
+we search for rows in `right` dataset (after building RTree spatial index)
+that satisfy defined conditions (spatial and extra).
+In this scenario we need to broadcast the `right` dataset, hence it should be small enough.
+As you can see, `broadcast` parameter defines which of two datasets will be `right`
+and then another will be `left`.
