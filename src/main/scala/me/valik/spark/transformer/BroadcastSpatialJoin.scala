@@ -238,7 +238,22 @@ class BroadcastSpatialJoin(override val uid: String) extends
     val emptyRows = spark.sparkContext.emptyRDD[Row]
     val emptyInput = spark.createDataFrame(emptyRows, schema)
 
-    transform(emptyInput).schema
+    emptyTransform(emptyInput).schema
+  }
+
+  /**
+    * optimization hack: minimize data processing
+    */
+  private def emptyTransform(emptyInput: DataFrame): DataFrame = {
+    val conf = getConfig(emptyInput.sparkSession)
+    val emptydf = conf.datasetCfg.df.limit(1)
+    // set external dataset to empty df
+    config = Some(conf.copy(datasetCfg=conf.datasetCfg.copy(df=emptydf)))
+    val res = transform(emptyInput)
+    // restore config
+    config = Some(conf)
+
+    res
   }
 
   override def transform(inputDS: Dataset[_]): DataFrame = {

@@ -500,8 +500,37 @@ class BroadcastSpatialJoinTest extends
     }
   }
 
-  // TODO:
-  //  transformSchema
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "schema"
+  it should "transform schema" in {
+    import spark.implicits._
+
+    val input = parsePointID(
+      """
+        |i1, 1, 1
+        |i2, 2, 2
+      """.stripMargin).toDS
+
+    val data = parsePoiID(
+      """
+        |d1, 1.1, 1.1, a
+        |d2, 2.1, 2.1, b
+      """.stripMargin).toDS
+
+    val expected = parsePointPoi(
+      """
+        |i1, 1, 1, d1, a
+        |i2, 2, 2, d2, b
+      """.stripMargin).toDS
+
+    val transformer = makeTransformer(data.toDF)
+      .setDataColumns("poi_id as poi_number, name as poi_name")
+    val expectedSchema = expected.selectCSV(
+      "id, lon, lat, poi_id as poi_number, name as poi_name").schema
+
+    val output = transformer.transformSchema(input.schema)
+    assert(output, expectedSchema)
+  }
+
 }
 
 object BroadcastSpatialJoinTest {
