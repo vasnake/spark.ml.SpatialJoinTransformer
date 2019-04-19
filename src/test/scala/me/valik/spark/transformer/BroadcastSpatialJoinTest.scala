@@ -453,8 +453,54 @@ class BroadcastSpatialJoinTest extends
     noFilter
   }
 
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "condition"
+  it should "apply extra condition function" in {
+    import spark.implicits._
+
+    val input = parsePointID(
+      """
+        |i1, 1, 1
+        |i2, 2, 2
+      """.stripMargin).toDS
+
+    val data = parsePoiID(
+      """
+        |d1, 1.1, 1.1, a
+        |d2, 2.1, 2.1, b
+        |d3, 3.1, 3.1, i2
+      """.stripMargin).toDS
+
+    val expected = parsePointPoi(
+      """
+        |i1, 1, 1, d1
+        |i2, 2, 2, d2
+        |i1, 1, 1, d3
+      """.stripMargin).toDS
+
+    // by default: for each dataset row find nearest point in broadcasted input;
+    val transformer = makeTransformer(data.toDF)
+      // right: dataset marked to broadcast, left: dataset to iterate over;
+      .setJoinCondition("right.id != left.name") // input.id != dataset.name
+
+    val output = transformer.transform(input)
+    output.show(20, truncate=false)
+    assertDataFrameEquals(output, expected.selectPP)
+
+    def noCondition = {
+      val expected = parsePointPoi(
+        """
+          |i1, 1, 1, d1
+          |i2, 2, 2, d2
+          |i2, 2, 2, d3
+        """.stripMargin).toDS
+      val transformer = makeTransformer(data.toDF)
+      val output = transformer.transform(input)
+      output.show(20, truncate=false)
+      assertDataFrameEquals(output, expected.selectPP)
+    }
+  }
+
   // TODO:
-  //  condition
   //  transformSchema
 }
 

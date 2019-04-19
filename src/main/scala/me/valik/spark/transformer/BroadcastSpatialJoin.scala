@@ -422,6 +422,7 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     * Produce filter function to push down to spatial join.
     * Join direction (broadcast input or external dataset) must be set
     * accordingly to the predicate.
+    * Broadcasted dataset will be considered as `right`.
     *
     * @param predicate predefined string, one of:
     *                  {{{
@@ -447,6 +448,8 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
   protected def parseExtraCondition(predicate: String): Option[ExtraCondition] = {
     // TODO: parse sql-like statement and produce function dynamically
+    // right: dataset marked to broadcast, input by default;
+    // left: dataset to be iterated, external dataset by default;
     predicate.toLowerCase match {
       case "right.fulldate_ts between left.start_ts and left.end_ts" => Some(
         ExtraCondition(
@@ -456,6 +459,14 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
             val bts = left.getAs[Long]("start_ts")
             val ets = left.getAs[Long]("end_ts")
             bts <= ut && ut <= ets
+          }) )
+      case "right.id != left.name" => Some(
+        ExtraCondition(
+          columns = Seq("name"),
+          func = (left, right) => {
+            val id = right.getAs[String]("id")
+            val name = left.getAs[String]("name")
+            id != name
           }) )
       case "" => None
       case x => throw new IllegalArgumentException(s"Spatial join transformer error: unknown extra condition `$x`")
