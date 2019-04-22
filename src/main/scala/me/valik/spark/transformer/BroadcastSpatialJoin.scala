@@ -75,7 +75,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
   setDefault(broadcast, input)
   def setBroadcast(value: String): this.type = set(broadcast, value)
 
-  final val predicate = new Param[String](this, "predicate", "spatial op: within, contains, intersects, overlaps, nearest")
+  final val predicate = new Param[String](this, "predicate", "spatial op, one of: withindist, within, contains, intersects, overlaps, nearest")
   setDefault(predicate, nearest)
   def setPredicate(value: String): this.type = set(predicate, value)
 
