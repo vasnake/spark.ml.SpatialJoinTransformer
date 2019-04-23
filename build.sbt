@@ -3,7 +3,7 @@
 
 val Organization = "me.valik.spark"
 val Name = "spark-transformer-spatialjoin"
-val Version = "0.0.1"
+val Version = "0.0.2-SNAPSHOT"
 
 val ScalaVersion = "2.12.8"
 val SparkVersion = "2.4.1"

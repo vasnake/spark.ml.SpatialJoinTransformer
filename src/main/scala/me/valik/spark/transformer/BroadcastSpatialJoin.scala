@@ -75,7 +75,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
   setDefault(broadcast, input)
   def setBroadcast(value: String): this.type = set(broadcast, value)
 
-  final val predicate = new Param[String](this, "predicate", "spatial op: within, contains, intersects, overlaps, nearest")
+  final val predicate = new Param[String](this, "predicate", "spatial op, one of: withindist, within, contains, intersects, overlaps, nearest")
   setDefault(predicate, nearest)
   def setPredicate(value: String): this.type = set(predicate, value)
 
@@ -297,14 +297,8 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
   def spatialJoin(inputDF: DataFrame, config: TransformerConfig, spark: SparkSession): DataFrame = {
     import me.valik.spatial.SpatialJoin._
-    import spark.implicits._
-
-    // geometry interface
-    //val inputGeom = config.inputCfg.geomSpec
-    //val dsetGeom = config.datasetCfg.geomSpec
-    // data to join
+    // add distance column?
     val needDistance = config.distanceColumnAlias.nonEmpty
-    //val dataColNames = config.datasetCfg.dataColumns
     // filter by distance needed?
     val filterByDist = isWithinD(config.spatialPredicate)
     val radius = extractRadius(config.spatialPredicate).meters.toInt // n meters or 0
@@ -323,20 +317,16 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
       else Some((dscols, incols, distance))
     }
 
-    // from dataset we need (geometry, data, used-in-filter cols),
+    // from dataset we need (geometry, data, used-in-filter cols)
     // selected already on loadDataset stage
     val dataset = config.datasetCfg.df
     // from input we need all
     val input = inputDF
 
-    // extra filter func
-    //val condition = extraConditionFunc(config.extraPredicate)
-
-    // do join: create Geometry object for each row, invoke BroadcastSpatialJoin wrapper
+    // do join: create Geometry object for each row, invoke BroadcastSpatialJoin wrapper;
     // (datasetRow, inputRow, distance_m)
-    val crosstable = {
+    val joinedRDD = {
       import me.valik.spark.geometry.DatasetGeometry._
-
       // debug
       show(dataset, s"dataset parts ${dataset.rdd.getNumPartitions}")
       show(input, s"input parts ${input.rdd.getNumPartitions}")
@@ -357,22 +347,12 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     }
 
     // convert rdd to dataframe, select required fields
-    val crosstabDF: DataFrame = {
-      val datasetColNames = dataset.schema.fields.map(_.name)
-      val selectedNames = config.datasetCfg.dataColumns.toSet
-
-      val schema = {
-        val selectedFields = dataset.schema.fields
-          .filter(f => selectedNames.contains(f.name ))
-
-        val selectedNameAlias = (config.datasetCfg.dataColumns zip config.datasetCfg.aliases).toMap
-
-        val fields: Seq[StructField] = input.schema.fields ++
-          selectedFields.map(f => f.copy(name=selectedNameAlias(f.name)))
-
-        if (needDistance) StructType(fields :+ StructField(config.distanceColumnAlias, DataTypes.IntegerType))
-        else StructType(fields)
-      }
+    val resDF: DataFrame = {
+      val datasetFields = dataset.schema.fields
+      val datasetColNames = datasetFields.map(_.name)
+      val datasetCFG = config.datasetCfg
+      val selectedNames = datasetCFG.dataColumns.toSet
+      def distanceField = StructField(config.distanceColumnAlias, DataTypes.IntegerType)
 
       def selectedCols(cols: Seq[Any]): Seq[Any] = {
         val pairs = cols zip datasetColNames
@@ -380,29 +360,40 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
         res.map(_._1)
       }
 
-      val rdd = crosstable.map { case (dsrow, inprow, dist) => {
+      val schema = {
+        val selectedFields = datasetFields.filter(f => selectedNames.contains(f.name ))
+        val selectedNameAlias = (datasetCFG.dataColumns zip datasetCFG.aliases).toMap
+
+        val fields: Seq[StructField] = input.schema.fields ++ selectedFields.map(f =>
+          f.copy(name=selectedNameAlias(f.name)))
+
+        if (needDistance) StructType(fields :+ distanceField)
+        else StructType(fields)
+      }
+
+      val rdd = joinedRDD.map { case (dsrow, inprow, dist) => {
         val res = inprow.toSeq ++ selectedCols(dsrow.toSeq)
-        if (needDistance) Row.fromSeq(res ++ Seq(dist))
+        if (needDistance) Row.fromSeq(res :+ dist)
         else Row.fromSeq(res)
       } }
 
       spark.createDataFrame(rdd, schema)
     }
     // debug
-    show(crosstabDF, s"join result parts ${crosstabDF.rdd.getNumPartitions}")
+    show(resDF, s"join result parts ${resDF.rdd.getNumPartitions}")
 
-    crosstabDF
+    resDF
   }
 
   /**
-    * Call rewrited BroadcastSpatialJoin left.predicate(right), return RDD.
+    * Call rewrited BroadcastSpatialJoin left.predicate(right), return joined RDD.
     * Arbitrary objects allowed.
     *
     * @param spark     session
     * @param dataset   big dataset, `left`
     * @param input     small (to broadcast) dataset, `right`
     * @param predicate spatial relation, one of: within, contains, intersects, overlaps, nearest, etc;
-    *                  see {@see spatialOperator}.
+    *                  see {@link spatialOperator}.
     *                              `withindist` should be defined as `withindist meters` e.g. `withindist 10000`
     *                              for finding all right objects closer than 10km to left object.
     * @param condition  extra predicate for filtering rows before joining rigth to left
@@ -463,7 +454,7 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
     parseExtraCondition(predicate).map(_.columns).getOrElse(Seq.empty)
   }
 
-  protected def parseExtraCondition(predicate: String): Option[ExtraCondition] = {
+  private def parseExtraCondition(predicate: String): Option[ExtraCondition] = {
     // TODO: parse sql-like statement and produce function dynamically
     // right: dataset marked to broadcast, input by default;
     // left: dataset to be iterated, external dataset by default;
