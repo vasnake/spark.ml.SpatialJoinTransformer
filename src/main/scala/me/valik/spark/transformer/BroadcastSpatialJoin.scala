@@ -2,13 +2,13 @@
 package me.valik.spark.transformer
 
 import org.apache.spark.ml.Transformer
-import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.types.{DataTypes, StructField, StructType}
 import org.apache.spark.ml.param.{Param, ParamMap, Params}
 import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, Identifiable}
 import org.apache.spark.rdd.RDD
-import org.locationtech.jts.geom.{Coordinate, Geometry, GeometryFactory}
-import org.locationtech.jts.io.WKTReader
+import org.locationtech.jts.geom.Geometry
+
 
 import scala.annotation.elidable
 import scala.util.Try
@@ -53,9 +53,10 @@ import scala.util.Try
 class BroadcastSpatialJoin(override val uid: String) extends
   Transformer with DefaultParamsWritable {
 
-    def this() = this(Identifiable.randomUID("spatial_join"))
+  def this() = this(Identifiable.randomUID("spatial_join"))
 
-  import me.valik.spark.transformer.{BroadcastSpatialJoin => bsj}
+  // companion object
+  import me.valik.spark.transformer.BroadcastSpatialJoin._
 
   // parameters
 
@@ -72,11 +73,11 @@ class BroadcastSpatialJoin(override val uid: String) extends
   def setDatasetFilter(value: String): this.type = set(filter, value)
 
   final val broadcast = new Param[String](this, "broadcast", "which DF will be broadcasted: 'input' or 'external' ")
-  setDefault(broadcast, bsj.input)
+  setDefault(broadcast, input)
   def setBroadcast(value: String): this.type = set(broadcast, value)
 
   final val predicate = new Param[String](this, "predicate", "spatial op, one of: withindist, within, contains, intersects, overlaps, nearest")
-  setDefault(predicate, bsj.nearest)
+  setDefault(predicate, nearest)
   def setPredicate(value: String): this.type = set(predicate, value)
 
   final val dataset = new Param[String](this, "dataset", "external dataset name, should be registered in sql metastore")
@@ -135,11 +136,10 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
   // config
 
-  @transient private var config: Option[bsj.TransformerConfig] = None
+  @transient private var config: Option[TransformerConfig] = None
   @transient implicit val self = this
-  import bsj.StringParam
 
-  protected def getConfig(spark: SparkSession): bsj.TransformerConfig = {
+  protected def getConfig(spark: SparkSession): TransformerConfig = {
     config.getOrElse({
       config = Some(makeConfig(spark))
       config.get
@@ -170,13 +170,13 @@ class BroadcastSpatialJoin(override val uid: String) extends
       "dataColumns property must contain at least one column name")
   }
 
-  private def makeConfig(spark: SparkSession): bsj.TransformerConfig = {
+  private def makeConfig(spark: SparkSession): TransformerConfig = {
     checkParams()
 
     def parsePointColumns(str: String) = Try {
       val Array(lon, lat) = str.splitTrim
-      bsj.PointColumns(lon, lat)
-    }.getOrElse(bsj.PointColumns("", ""))
+      PointColumns(lon, lat)
+    }.getOrElse(PointColumns("", ""))
 
     val (dataCols, dataColAliases) = {
       import DefaultSeparators.stringToSeparators
@@ -189,7 +189,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
     }
 
     val ds = { // external dataset, filtered and projected
-      val conditionCols: Seq[String] = bsj.extraConditionColumns(condition.get)
+      val conditionCols: Seq[String] = extraConditionColumns(condition.get)
       val cols = (dataCols ++
         Seq(datasetWKT.get) ++
         $(datasetPoint).splitTrim ++
@@ -206,21 +206,21 @@ class BroadcastSpatialJoin(override val uid: String) extends
       }.getOrElse(projected)
     }
 
-    bsj.TransformerConfig(
-      bsj.ExternalDatasetConfig(
+    TransformerConfig(
+      ExternalDatasetConfig(
         name = dataset.get,
         df = ds,
         wktColumn = datasetWKT.get,
         parsePointColumns(datasetPoint.get),
         dataCols,
         dataColAliases),
-      bsj.InputDatasetConfig(
+      InputDatasetConfig(
         wktColumn = inputWKT.get,
         parsePointColumns(inputPoint.get)),
       distanceColumnAlias.get,
       spatialPredicate = predicate.get,
       extraPredicate = condition.get,
-      broadcastInput = broadcast.get == bsj.input
+      broadcastInput = broadcast.get == input
     )
   }
 
@@ -259,7 +259,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
   override def transform(inputDS: Dataset[_]): DataFrame = {
     val spark = inputDS.sparkSession
-    bsj.spatialJoin(inputDS.toDF, getConfig(spark), spark)
+    spatialJoin(inputDS.toDF, getConfig(spark), spark)
   }
 
 }

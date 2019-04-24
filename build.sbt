@@ -38,6 +38,8 @@ val buildSettings = Seq(
   javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
   javaOptions ++= Seq("-Xms512M", "-Xmx2048M", "-XX:+CMSClassUnloadingEnabled"),
   scalacOptions ++= Seq("-deprecation", "-unchecked", "-feature", "-encoding", "UTF-8"),
+  // sbt -Delide.below=2001 assembly
+  scalacOptions ++= Seq("-Xelide-below", sys.props.getOrElse("elide.below", "900")),
   // assembly parameters
   test in assembly := {},
   assemblyOption in assembly := (assemblyOption in assembly).value.copy(
