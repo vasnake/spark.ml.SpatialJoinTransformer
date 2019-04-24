@@ -26,12 +26,15 @@ __argsLen=${#@}
 
 PYTHON_VERSION=3.5.5
 PIP_VERSION=10.0.1
-PYTEST_VERSION=3.4.2
 PIPENV_VERSION=11.9.0
+PYTEST_VERSION=3.4.2
+PANDAS_VERSION=0.24.2
+
 PYENV_ROOT=${HOME}/.pyenv
 PYTHON_HOME=${PYENV_ROOT}/versions/${PYTHON_VERSION}
 SPARK_HOME=${HOME}/.sparkenv/spark-2.4.1-bin-hadoop2.7
 PROJECT_DIR=${__dir}/../../..
+SPARK_JARS=/home/valik/data/projects/spark.ml.SpatialJoinTransformer/target/scala-2.12/spark-transformer-spatialjoin-assembly-0.0.2-SNAPSHOT.jar
 
 pushd ${__dir}
 
@@ -93,6 +96,7 @@ installModule() {
 # install module
     ${PYTHON_HOME}/bin/pipenv install -e . --dev --skip-lock
     ${PYTHON_HOME}/bin/pipenv install pytest==${PYTEST_VERSION} --dev --skip-lock
+    ${PYTHON_HOME}/bin/pipenv install pandas==${PANDAS_VERSION} --dev --skip-lock
     #${PYTHON_HOME}/bin/pipenv install twine==1.10.0 --dev --skip-lock
     #${PYTHON_HOME}/bin/pipenv install wheel==0.30.0 --dev --skip-lock
 }
@@ -101,6 +105,7 @@ runTests() {
 # run tests
 # https://docs.pytest.org/en/latest/usage.html
     ${PYTHON_HOME}/bin/pipenv --venv
+    export SPARK_JARS
     # ${PYTHON_HOME}/bin/pipenv run pytest -vv --junitxml=./test-report
     ${PYTHON_HOME}/bin/pipenv run pytest -vv -s -x
 }
@@ -147,10 +152,9 @@ function getSpark() {
     export SPARK_HOME=${HOME}/.sparkenv/spark-2.4.1-bin-hadoop2.7
     popd
     cat <<EOF >> .env
-PYSPARK_TEST_JARS=${PROJECT_DIR}/target/scala-2.12/spark-transformer-spatialjoin-assembly-0.0.2-SNAPSHOT.jar
-PYTHON_BASE_DIR=${__dir}
-MODEL_TMP_DIR=/tmp/spatial-join-transformer/it
+SPARK_JARS=${PROJECT_DIR}/target/scala-2.12/spark-transformer-spatialjoin-assembly-0.0.2-SNAPSHOT.jar
+BASE_DIR=${__dir}
 SPARK_HOME=${SPARK_HOME}
-PYSPARK_SUBMIT_ARGS="--master local[2] --conf spark.jars=${PYSPARK_TEST_JARS} --conf spark.checkpoint.dir=/tmp/checkpoints pyspark-shell"
+PYSPARK_SUBMIT_ARGS="--master local[2] --conf spark.jars=${SPARK_JARS} --conf spark.checkpoint.dir=/tmp/checkpoints pyspark-shell"
 EOF
 }

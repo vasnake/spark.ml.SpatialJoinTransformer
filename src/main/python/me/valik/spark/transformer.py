@@ -32,7 +32,7 @@ class BroadcastSpatialJoin(JavaTransformer, JavaMLReadable, JavaMLWritable):
     True
     """
 
-    _fqdn = "me.valik.spark.transformer.BroadcastSpatialJoin"
+    _fqn = "me.valik.spark.transformer.BroadcastSpatialJoin"
 
     dataColumns = Param(Params._dummy(),
                        "dataColumns",
@@ -109,7 +109,7 @@ class BroadcastSpatialJoin(JavaTransformer, JavaMLReadable, JavaMLWritable):
                  filter="",
                  condition=""):
         super(BroadcastSpatialJoin, self).__init__()
-        self._java_obj = self._new_java_obj(self._fqdn, self.uid)
+        self._java_obj = self._new_java_obj(self._fqn, self.uid)
 
         # set params default values
         self._setDefault(dataColumns="",
