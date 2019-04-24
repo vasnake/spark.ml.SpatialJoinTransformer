@@ -8,6 +8,7 @@ from . import local_spark
 
 from me.valik import BroadcastSpatialJoin
 
+# TODO: add test for serializable pipeline
 
 def check(transformer, input_df, expected_df, select=False):
     actual = transformer.transform(input_df)

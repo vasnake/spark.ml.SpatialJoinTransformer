@@ -5,6 +5,8 @@ import com.holdenkarau.spark.testing.DataFrameSuiteBase
 import org.apache.spark.sql.{DataFrame, Dataset, Row}
 import org.apache.spark.storage.StorageLevel
 
+// TODO: add test for serializable pipeline
+
 class BroadcastSpatialJoinTest extends
   FlatSpec with DataFrameSuiteBase {
 
