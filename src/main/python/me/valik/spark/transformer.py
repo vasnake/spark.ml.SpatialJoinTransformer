@@ -16,6 +16,9 @@ class BroadcastSpatialJoin(JavaTransformer, JavaMLReadable, JavaMLWritable):
     """
     Implements the transforms which are defined as spatial join.
 
+    >>> from me.valik.spark.transformer import BroadcastSpatialJoin
+    >>> poi = spark.createDataFrame([("a", 1.1, 3.1), ("b", 2.1, 5.1)], ["poi_id", "lon", "lat"])
+    >>> poi.createOrReplaceTempView("poi")
     >>> df = spark.createDataFrame([(0, 1.0, 3.0), (2, 2.0, 5.0)], ["id", "lon", "lat"])
     >>> trans = BroadcastSpatialJoin(
     ...     dataset="poi", dataColumns="poi_id", datasetPoint="lon, lat",

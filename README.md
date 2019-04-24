@@ -75,6 +75,20 @@ More detailed examples with different parameters, conditions and predicates you 
 More information about Spark transformers you can find in
 [documentation](https://spark.apache.org/docs/latest/ml-pipeline.html)
 
+### PySpark
+Evidently, you can use `BroadcastSpatialJoin` transformer in Scala or Java projects.
+Also there is a Python wrapper for using in PySpark environment:
+
+```python
+from me.valik.spark.transformer import BroadcastSpatialJoin
+poi = spark.createDataFrame([("a", 1.1, 3.1), ("b", 2.1, 5.1)], ["poi_id", "lon", "lat"])
+poi.createOrReplaceTempView("poi")
+df = spark.createDataFrame([(0, 1.0, 3.0), (2, 2.0, 5.0)], ["id", "lon", "lat"])
+trans = BroadcastSpatialJoin(
+    dataset="poi", dataColumns="poi_id", datasetPoint="lon, lat", inputPoint="lon, lat")
+result = trans.transform(df)
+```
+
 ### Transformer parameters
 All parameters are String parameters.
 
