@@ -55,7 +55,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
     def this() = this(Identifiable.randomUID("spatial_join"))
 
-  import me.valik.spark.transformer.BroadcastSpatialJoin._
+  import me.valik.spark.transformer.{BroadcastSpatialJoin => bsj}
 
   // parameters
 
@@ -72,11 +72,11 @@ class BroadcastSpatialJoin(override val uid: String) extends
   def setDatasetFilter(value: String): this.type = set(filter, value)
 
   final val broadcast = new Param[String](this, "broadcast", "which DF will be broadcasted: 'input' or 'external' ")
-  setDefault(broadcast, input)
+  setDefault(broadcast, bsj.input)
   def setBroadcast(value: String): this.type = set(broadcast, value)
 
   final val predicate = new Param[String](this, "predicate", "spatial op, one of: withindist, within, contains, intersects, overlaps, nearest")
-  setDefault(predicate, nearest)
+  setDefault(predicate, bsj.nearest)
   def setPredicate(value: String): this.type = set(predicate, value)
 
   final val dataset = new Param[String](this, "dataset", "external dataset name, should be registered in sql metastore")
@@ -135,10 +135,11 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
   // config
 
-  @transient private var config: Option[TransformerConfig] = None
+  @transient private var config: Option[bsj.TransformerConfig] = None
   @transient implicit val self = this
+  import bsj.StringParam
 
-  protected def getConfig(spark: SparkSession): TransformerConfig = {
+  protected def getConfig(spark: SparkSession): bsj.TransformerConfig = {
     config.getOrElse({
       config = Some(makeConfig(spark))
       config.get
@@ -169,13 +170,13 @@ class BroadcastSpatialJoin(override val uid: String) extends
       "dataColumns property must contain at least one column name")
   }
 
-  private def makeConfig(spark: SparkSession): TransformerConfig = {
+  private def makeConfig(spark: SparkSession): bsj.TransformerConfig = {
     checkParams()
 
     def parsePointColumns(str: String) = Try {
       val Array(lon, lat) = str.splitTrim
-      PointColumns(lon, lat)
-    }.getOrElse(PointColumns("", ""))
+      bsj.PointColumns(lon, lat)
+    }.getOrElse(bsj.PointColumns("", ""))
 
     val (dataCols, dataColAliases) = {
       import DefaultSeparators.stringToSeparators
@@ -188,7 +189,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
     }
 
     val ds = { // external dataset, filtered and projected
-      val conditionCols: Seq[String] = extraConditionColumns(condition.get)
+      val conditionCols: Seq[String] = bsj.extraConditionColumns(condition.get)
       val cols = (dataCols ++
         Seq(datasetWKT.get) ++
         $(datasetPoint).splitTrim ++
@@ -205,27 +206,27 @@ class BroadcastSpatialJoin(override val uid: String) extends
       }.getOrElse(projected)
     }
 
-    TransformerConfig(
-      ExternalDatasetConfig(
+    bsj.TransformerConfig(
+      bsj.ExternalDatasetConfig(
         name = dataset.get,
         df = ds,
         wktColumn = datasetWKT.get,
         parsePointColumns(datasetPoint.get),
         dataCols,
         dataColAliases),
-      InputDatasetConfig(
+      bsj.InputDatasetConfig(
         wktColumn = inputWKT.get,
         parsePointColumns(inputPoint.get)),
       distanceColumnAlias.get,
       spatialPredicate = predicate.get,
       extraPredicate = condition.get,
-      broadcastInput = broadcast.get == input
+      broadcastInput = broadcast.get == bsj.input
     )
   }
 
   // transformer
 
-  override def copy(extra: ParamMap): Transformer = defaultCopy(extra)
+  override def copy(extra: ParamMap): BroadcastSpatialJoin = defaultCopy(extra)
 
   /**
     * You should call it to check schema before starting heavy and long transform
@@ -258,7 +259,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
   override def transform(inputDS: Dataset[_]): DataFrame = {
     val spark = inputDS.sparkSession
-    spatialJoin(inputDS.toDF, getConfig(spark), spark)
+    bsj.spatialJoin(inputDS.toDF, getConfig(spark), spark)
   }
 
 }

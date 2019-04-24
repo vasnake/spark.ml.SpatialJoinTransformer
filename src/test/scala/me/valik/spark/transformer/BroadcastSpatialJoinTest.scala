@@ -568,8 +568,6 @@ object BroadcastSpatialJoinTest {
       .setDataColumns("poi_id")
   }
 
-  //val sqltransformer = org.apache.spark.ml.feature.SQLTransformer
-
   import scala.language.implicitConversions
   import me.valik.toolbox.StringToolbox._
   import DefaultSeparators.stringToSeparators
@@ -586,4 +584,5 @@ object BroadcastSpatialJoinTest {
 
     def selectPP: DataFrame = selectCSV("id, lon, lat, poi_id")
   }
+  //val sqltransformer = org.apache.spark.ml.feature.SQLTransformer
 }

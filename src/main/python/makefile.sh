@@ -32,8 +32,10 @@ PANDAS_VERSION=0.24.2
 
 PYENV_ROOT=${HOME}/.pyenv
 PYTHON_HOME=${PYENV_ROOT}/versions/${PYTHON_VERSION}
-SPARK_HOME=${HOME}/.sparkenv/spark-2.4.1-bin-hadoop2.7
 PROJECT_DIR=${__dir}/../../..
+SPARK_HOME=/home/valik/.sparkenv/spark-2.4.1-bin-without-hadoop-scala-2.12
+#SPARK_DIST_CLASSPATH=/home/valik/.sparkenv/spark-2.4.1-bin-hadoop2.7/jars/slf4j-api-1.7.16.jar:/home/valik/.sparkenv/spark-2.4.1-bin-hadoop2.7/jars/hadoop-common-2.7.3.jar
+SPARK_DIST_CLASSPATH=$(find /home/valik/.sparkenv/spark-2.4.1-bin-hadoop2.7/jars -not -name '*_2.11*.jar' | xargs echo | tr ' ' ':')
 SPARK_JARS=/home/valik/data/projects/spark.ml.SpatialJoinTransformer/target/scala-2.12/spark-transformer-spatialjoin-assembly-0.0.2-SNAPSHOT.jar
 
 pushd ${__dir}
@@ -50,6 +52,8 @@ main() {
             installModule
         elif [ "${arg1}" = "run-tests" ]; then
             runTests
+        elif [ "${arg1}" = "get-spark" ]; then
+            getSpark
         else
             errorExit "Unknown command '${arg1}'"
         fi
@@ -106,6 +110,8 @@ runTests() {
 # https://docs.pytest.org/en/latest/usage.html
     ${PYTHON_HOME}/bin/pipenv --venv
     export SPARK_JARS
+    export SPARK_HOME
+    export SPARK_DIST_CLASSPATH
     # ${PYTHON_HOME}/bin/pipenv run pytest -vv --junitxml=./test-report
     ${PYTHON_HOME}/bin/pipenv run pytest -vv -s -x
 }
@@ -113,6 +119,20 @@ runTests() {
 errorExit() {
     echo "$1" 1>&2
     exit 1
+}
+
+function getSpark() {
+    mkdir ~/.sparkenv && pushd ~/.sparkenv
+    wget http://mirror.linux-ia64.org/apache/spark/spark-2.4.1/spark-2.4.1-bin-hadoop2.7.tgz
+    tar -xzvf spark-2.4.1-bin-hadoop2.7.tgz && rm $_
+    export SPARK_HOME=${HOME}/.sparkenv/spark-2.4.1-bin-hadoop2.7
+    popd
+    cat <<EOF >> .env
+SPARK_JARS=${PROJECT_DIR}/target/scala-2.12/spark-transformer-spatialjoin-assembly-0.0.2-SNAPSHOT.jar
+BASE_DIR=${__dir}
+SPARK_HOME=${SPARK_HOME}
+PYSPARK_SUBMIT_ARGS="--master local[2] --conf spark.jars=${SPARK_JARS} --conf spark.checkpoint.dir=/tmp/checkpoints pyspark-shell"
+EOF
 }
 
 main
@@ -143,18 +163,4 @@ select Python Interpreter ->
 OK
 EOF
     echo ${MSG}
-}
-
-function getSpark() {
-    mkdir ~/.sparkenv && pushd $_
-    wget http://mirror.linux-ia64.org/apache/spark/spark-2.4.1/spark-2.4.1-bin-hadoop2.7.tgz
-    tar -xzvf spark-2.4.1-bin-hadoop2.7.tgz && rm $_
-    export SPARK_HOME=${HOME}/.sparkenv/spark-2.4.1-bin-hadoop2.7
-    popd
-    cat <<EOF >> .env
-SPARK_JARS=${PROJECT_DIR}/target/scala-2.12/spark-transformer-spatialjoin-assembly-0.0.2-SNAPSHOT.jar
-BASE_DIR=${__dir}
-SPARK_HOME=${SPARK_HOME}
-PYSPARK_SUBMIT_ARGS="--master local[2] --conf spark.jars=${SPARK_JARS} --conf spark.checkpoint.dir=/tmp/checkpoints pyspark-shell"
-EOF
 }
