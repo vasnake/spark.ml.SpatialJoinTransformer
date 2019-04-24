@@ -51,9 +51,9 @@ import scala.util.Try
   * @param uid pipeline stage id
   */
 class BroadcastSpatialJoin(override val uid: String) extends
-  Transformer with Params with DefaultParamsWritable {
+  Transformer with DefaultParamsWritable {
 
-  def this() = this(Identifiable.randomUID("spatial_join"))
+    def this() = this(Identifiable.randomUID("spatial_join"))
 
   import me.valik.spark.transformer.BroadcastSpatialJoin._
 
@@ -263,7 +263,10 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
 }
 
+
 object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] {
+
+  override def load(path: String): BroadcastSpatialJoin = super.load(path)
 
   /**
     * constant that defines default direction of spatial join: 'input' means

@@ -568,6 +568,8 @@ object BroadcastSpatialJoinTest {
       .setDataColumns("poi_id")
   }
 
+  //val sqltransformer = org.apache.spark.ml.feature.SQLTransformer
+
   import scala.language.implicitConversions
   import me.valik.toolbox.StringToolbox._
   import DefaultSeparators.stringToSeparators
