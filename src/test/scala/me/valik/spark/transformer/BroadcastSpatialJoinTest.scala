@@ -561,7 +561,7 @@ object BroadcastSpatialJoinTest {
 
   def makeTransformer(data: DataFrame, name: String = "poi") = {
     data.createOrReplaceTempView(name)
-    new BroadcastSpatialJoin()
+    new me.valik.spark.transformer.BroadcastSpatialJoin()
       .setDataset(name)
       .setDatasetPoint("lon, lat")
       .setInputPoint("lon, lat")
@@ -584,4 +584,5 @@ object BroadcastSpatialJoinTest {
 
     def selectPP: DataFrame = selectCSV("id, lon, lat, poi_id")
   }
+  //val sqltransformer = org.apache.spark.ml.feature.SQLTransformer
 }

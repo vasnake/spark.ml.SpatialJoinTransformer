@@ -2,13 +2,13 @@
 package me.valik.spark.transformer
 
 import org.apache.spark.ml.Transformer
-import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.types.{DataTypes, StructField, StructType}
 import org.apache.spark.ml.param.{Param, ParamMap, Params}
 import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, Identifiable}
 import org.apache.spark.rdd.RDD
-import org.locationtech.jts.geom.{Coordinate, Geometry, GeometryFactory}
-import org.locationtech.jts.io.WKTReader
+import org.locationtech.jts.geom.Geometry
+
 
 import scala.annotation.elidable
 import scala.util.Try
@@ -51,10 +51,11 @@ import scala.util.Try
   * @param uid pipeline stage id
   */
 class BroadcastSpatialJoin(override val uid: String) extends
-  Transformer with Params with DefaultParamsWritable {
+  Transformer with DefaultParamsWritable {
 
   def this() = this(Identifiable.randomUID("spatial_join"))
 
+  // companion object
   import me.valik.spark.transformer.BroadcastSpatialJoin._
 
   // parameters
@@ -225,7 +226,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
   // transformer
 
-  override def copy(extra: ParamMap): Transformer = defaultCopy(extra)
+  override def copy(extra: ParamMap): BroadcastSpatialJoin = defaultCopy(extra)
 
   /**
     * You should call it to check schema before starting heavy and long transform
@@ -263,7 +264,10 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
 }
 
+
 object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] {
+
+  override def load(path: String): BroadcastSpatialJoin = super.load(path)
 
   /**
     * constant that defines default direction of spatial join: 'input' means
