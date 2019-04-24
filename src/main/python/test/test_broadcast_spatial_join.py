@@ -18,7 +18,6 @@ def check(transformer, input_df, expected_df, select=False):
 
 @pytest.fixture(scope="class")
 def bag(request, local_spark):
-
     builtins.spark = local_spark
 
     poi = local_spark.createDataFrame(
