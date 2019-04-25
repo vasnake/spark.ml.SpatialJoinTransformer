@@ -37,8 +37,8 @@ SPARK_JARS=$(find ${PROJECT_DIR}/target/scala-2.12 -name '*spatialjoin-assembly-
 
 # Spark binaries, Scala 2.12 with Hadoop should simplify things
 # https://spark.apache.org/docs/latest/hadoop-provided.html
-SPARK_HOME=${HOME}/.sparkenv/spark-2.4.1-bin-without-hadoop-scala-2.12
-SPARK_DIST_CLASSPATH=$(find ${HOME}/.sparkenv/spark-2.4.1-bin-hadoop2.7/jars \
+SPARK_HOME=/opt/spark/spark-2.4.1-bin-without-hadoop-scala-2.12
+SPARK_DIST_CLASSPATH=$(find /opt/spark/spark-2.4.1-bin-hadoop2.7/jars \
     -not -name '*_2.11*.jar' | xargs echo | tr ' ' ':')
 
 pushd ${__dir}
