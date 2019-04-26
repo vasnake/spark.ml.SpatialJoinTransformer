@@ -2,6 +2,8 @@
 # -*- mode: shell; coding: utf-8 -*-
 # (c) Valik mailto:vasnake@gmail.com
 
+# Python wrapper for transformer build and test helpers
+
 # http://kvz.io/blog/2013/11/21/bash-best-practices/
 # Use set -o pipefail in scripts to catch mysqldump fails in e.g. mysqldump |gzip.
 # The exit status of the last command that threw a non-zero exit code is returned

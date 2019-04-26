@@ -3,15 +3,12 @@
 
 val Organization = "me.valik.spark"
 val Name = "spark-transformer-spatialjoin"
-val Version = "0.0.2-SNAPSHOT"
+val Version = "0.0.2"
 
 val ScalaVersion = "2.12.8"
 val SparkVersion = "2.4.1"
 
 val sparkDeps = Seq(
-  //"org.apache.spark" %% "spark-streaming" % SparkVersion,
-  //"org.apache.spark" %% "spark-sql" % SparkVersion,
-  //"org.apache.spark" %% "spark-hive" % SparkVersion,
   "org.apache.spark" %% "spark-mllib" % SparkVersion,
   "org.apache.spark" %% "spark-core" % SparkVersion
 )
@@ -38,13 +35,15 @@ val buildSettings = Seq(
   javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
   javaOptions ++= Seq("-Xms512M", "-Xmx2048M", "-XX:+CMSClassUnloadingEnabled"),
   scalacOptions ++= Seq("-deprecation", "-unchecked", "-feature", "-encoding", "UTF-8"),
+  // elide assert and below
   // sbt -Delide.below=2001 assembly
-  scalacOptions ++= Seq("-Xelide-below", sys.props.getOrElse("elide.below", "900")),
+  // elide WARNING end below
+  scalacOptions ++= Seq("-Xelide-below", sys.props.getOrElse("elide.below", "901")),
   // assembly parameters
   test in assembly := {},
   assemblyOption in assembly := (assemblyOption in assembly).value.copy(
     includeScala = false, includeDependency = true),
-  // temp lib fix
+  // temp lib fix, until spark-testing-base is ready for 2.12_2.4
   assemblyMergeStrategy in assembly := {
     case n if n.contains("holdenkarau") => MergeStrategy.discard
     case x => (assemblyMergeStrategy in assembly).value(x)
@@ -70,11 +69,4 @@ lazy val root = (project in file(".")).settings(
       ++ spatialDeps
       ++ testDeps.map(_ % Test)
   )
-
-  // no pom publishing
-  //pomIncludeRepository := { x => false },
-
-  // uses compile classpath for the run task, including "provided" jar (cf http://stackoverflow.com/a/21803413/3827)
-  //run in Compile := Defaults.runTask(fullClasspath in Compile, mainClass in (Compile, run), runner in (Compile, run)).evaluated
-
 ).dependsOn(Projects.spatialSpark)
