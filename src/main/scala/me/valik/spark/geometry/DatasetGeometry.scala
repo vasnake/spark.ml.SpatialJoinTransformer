@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Valentin Fedulov <vasnake@gmail.com>
+ *
+ *    Licensed under the Apache License, Version 2.0 (the "License");
+ *    you may not use this file except in compliance with the License.
+ *    You may obtain a copy of the License at
+ *
+ *        http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing, software
+ *    distributed under the License is distributed on an "AS IS" BASIS,
+ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *    See the License for the specific language governing permissions and
+ *    limitations under the License.
+ */
+
 package me.valik.spark.geometry
 
 import org.apache.spark.rdd.RDD
@@ -6,6 +22,9 @@ import org.apache.spark.sql.types.DataTypes
 import org.locationtech.jts.geom.{Coordinate, Geometry, GeometryFactory, PrecisionModel}
 import org.locationtech.jts.io.WKTReader
 
+/**
+  * JTS Geometry, RDD helpers
+  */
 object DatasetGeometry {
 
   // TODO: add unit tests
@@ -22,8 +41,16 @@ object DatasetGeometry {
     if (wkt != null && wkt.nonEmpty) wktReader.read(wkt) else null
   }
 
+  /**
+    * JTS meta objects, have serialization problems
+    * @param gf geometry factory
+    * @param wktReader WKT reader
+    */
   case class GeometryMeta(gf: GeometryFactory, wktReader: WKTReader)
 
+  /**
+    * Companion, factory object
+    */
   object GeometryMeta {
     def apply(srid: Int): GeometryMeta = {
       val gf = new GeometryFactory(new PrecisionModel(PrecisionModel.FLOATING), srid)
@@ -49,7 +76,8 @@ object DatasetGeometry {
   }
 
   /**
-    * abstraction over two types of geometry: from wkt column or from point(lon, lat) columns
+    * abstraction over two types of geometry:
+    * builded from wkt column or from point(lon, lat) columns
     */
   sealed trait DatasetGeometry {
     // TODO: may return mull!

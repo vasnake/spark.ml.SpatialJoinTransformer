@@ -7,7 +7,7 @@ import re
 
 here = path.abspath(path.dirname(__file__))
 
-# val Version = "0.0.2-SNAPSHOT"
+# val Version = "0.0.2"
 with open(path.join(here, '..', '..', '..', 'build.sbt')) as f:
     VERSION = re.search('val Version = \"(.+)\"', f.read(), re.IGNORECASE).group(1)
     print("VERSION: {}".format(VERSION))

@@ -25,24 +25,40 @@ def bag(request, local_spark):
         ["poi_id", "lon", "lat"])
     poi.createOrReplaceTempView("poi")
 
+    input = local_spark.createDataFrame(
+        [(0, 1.0, 3.0), (2, 2.0, 5.0)],
+        ["id", "lon", "lat"])
+
+    expected = local_spark.createDataFrame(
+        [(0, 1.0, 3.0, "a"), (2, 2.0, 5.0, "b")],
+        ["id", "lon", "lat", "poi_id"])
+
     transformer = BroadcastSpatialJoin(
         dataset="poi", dataColumns="poi_id", datasetPoint="lon, lat", inputPoint="lon, lat"
     )
 
-    return dict(transformer=transformer)
+    return dict(
+        transformer=transformer,
+        input=input,
+        expected=expected
+    )
 
 
 class TestBroadcastSpatialJoin(object):
 
     def test_simple_transform(self, bag):
-        spark = builtins.spark
+        check(bag["transformer"], bag["input"], bag["expected"])
 
-        input = spark.createDataFrame(
-            [(0, 1.0, 3.0), (2, 2.0, 5.0)],
-            ["id", "lon", "lat"])
+    def test_pipeline(self, bag):
+        from pyspark.ml.pipeline import Pipeline
+        # create and save and load
+        pth = "/tmp/spatial-join"
+        new_p = Pipeline().setStages([bag["transformer"]])
+        new_p.write().overwrite().save(pth)
+        saved_p = Pipeline.load(pth)
 
-        expected = spark.createDataFrame(
-            [(0, 1.0, 3.0, "a"), (2, 2.0, 5.0, "b")],
-            ["id", "lon", "lat", "poi_id"])
-
-        check(bag["transformer"], input, expected)
+        # check transformations
+        inp = bag["input"]
+        exp = bag["expected"]
+        check(new_p.fit(inp), inp, exp)
+        check(saved_p.fit(inp), inp, exp)

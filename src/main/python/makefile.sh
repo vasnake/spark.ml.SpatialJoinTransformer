@@ -2,6 +2,8 @@
 # -*- mode: shell; coding: utf-8 -*-
 # (c) Valik mailto:vasnake@gmail.com
 
+# Python wrapper for transformer build and test helpers
+
 # http://kvz.io/blog/2013/11/21/bash-best-practices/
 # Use set -o pipefail in scripts to catch mysqldump fails in e.g. mysqldump |gzip.
 # The exit status of the last command that threw a non-zero exit code is returned
@@ -37,8 +39,8 @@ SPARK_JARS=$(find ${PROJECT_DIR}/target/scala-2.12 -name '*spatialjoin-assembly-
 
 # Spark binaries, Scala 2.12 with Hadoop should simplify things
 # https://spark.apache.org/docs/latest/hadoop-provided.html
-SPARK_HOME=${HOME}/.sparkenv/spark-2.4.1-bin-without-hadoop-scala-2.12
-SPARK_DIST_CLASSPATH=$(find ${HOME}/.sparkenv/spark-2.4.1-bin-hadoop2.7/jars \
+SPARK_HOME=/opt/spark/spark-2.4.1-bin-without-hadoop-scala-2.12
+SPARK_DIST_CLASSPATH=$(find /opt/spark/spark-2.4.1-bin-hadoop2.7/jars \
     -not -name '*_2.11*.jar' | xargs echo | tr ' ' ':')
 
 pushd ${__dir}
@@ -55,6 +57,8 @@ main() {
             installModule
         elif [ "${arg1}" = "run-tests" ]; then
             runTests
+        elif [ "${arg1}" = "build-wheel" ]; then
+            buildWheel
         else
             errorExit "Unknown command '${arg1}'"
         fi
@@ -113,6 +117,11 @@ runTests() {
     export SPARK_JARS SPARK_HOME SPARK_DIST_CLASSPATH
     # ${PYTHON_HOME}/bin/pipenv run pytest -vv --junitxml=./test-report
     ${PYTHON_HOME}/bin/pipenv run pytest -vv -s -x
+}
+
+buildWheel() {
+    ${PYTHON_HOME}/bin/pipenv install wheel==0.30.0 --dev --skip-lock
+    ${PYTHON_HOME}/bin/pipenv run python setup.py bdist_wheel
 }
 
 errorExit() {

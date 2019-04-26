@@ -1,9 +1,25 @@
+/*
+ * Copyright 2019 Valentin Fedulov <vasnake@gmail.com>
+ *
+ *    Licensed under the Apache License, Version 2.0 (the "License");
+ *    you may not use this file except in compliance with the License.
+ *    You may obtain a copy of the License at
+ *
+ *        http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing, software
+ *    distributed under the License is distributed on an "AS IS" BASIS,
+ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *    See the License for the specific language governing permissions and
+ *    limitations under the License.
+ */
+
 package me.valik.spark.transformer
 
 import org.scalatest._
+import org.apache.spark.sql.{DataFrame, Dataset}
 import com.holdenkarau.spark.testing.DataFrameSuiteBase
-import org.apache.spark.sql.{DataFrame, Dataset, Row}
-import org.apache.spark.storage.StorageLevel
+
 
 class BroadcastSpatialJoinTest extends
   FlatSpec with DataFrameSuiteBase {
@@ -518,6 +534,43 @@ class BroadcastSpatialJoinTest extends
     assert(output, expectedSchema)
   }
 
+  // testOnly me.valik.spark.transformer.BroadcastSpatialJoinTest -- -z "pipeline"
+  it should "transform in pipeline" in {
+    import spark.implicits._
+    import org.apache.spark.ml.Pipeline
+
+    val input = parsePointID(
+      """
+        |i1, 1, 1
+        |i2, 2, 2
+      """.stripMargin).toDS
+
+    val data = parsePoiID(
+      """
+        |d1, 1.1, 1.1
+        |d2, 2.1, 2.1
+      """.stripMargin).toDS
+
+    val expected = parsePointPoi(
+      """
+        |i1, 1, 1, d1
+        |i2, 2, 2, d2
+      """.stripMargin).toDS
+
+    val transformer = makeTransformer(data.toDF)
+
+    // create and save and load
+    val pth = "/tmp/spatial-join"
+    val new_p = new Pipeline().setStages(Array(transformer))
+    new_p.write.overwrite().save(pth)
+    val saved_p = Pipeline.load(pth)
+
+    // check transformations
+    assertDataFrameEquals(new_p.fit(input).transform(input), expected.selectPP)
+    assertDataFrameEquals(saved_p.fit(input).transform(input), expected.selectPP)
+  }
+
+  // TODO: it: create pipeline in python env; execute pipeline in scala env
 }
 
 object BroadcastSpatialJoinTest {

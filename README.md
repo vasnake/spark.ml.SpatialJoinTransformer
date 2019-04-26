@@ -12,13 +12,13 @@ Also, SpatialJoinTransformer depends on
 [LocationTech JTS](https://github.com/locationtech/jts) 
 and [GeographicLib](https://sourceforge.net/projects/geographiclib/)
 
-Was built and tested with Spark 2.4 and Scala 2.12
+Project was built and tested with Spark 2.4 and Scala 2.12
 
 ## Installation
 
 You can use binary packages from 
 [releases](https://github.com/vasnake/spark.ml.SpatialJoinTransformer/releases)
-page or, add dependency to your sbt project:
+page or add dependency to your sbt project:
 
 ```scala
 // project/Build.scala
@@ -39,7 +39,7 @@ Stay tuned.
 
 ## Usage
 
-Let's say, we have an `input` dataset that needs to be transformed, 
+Let's say we have an `input` dataset that needs to be transformed, 
 and some `external dataset` aka just `dataset`.
 To perform a transformation, spatial join exactly, we need these datasets
 to have spatial information.
@@ -76,7 +76,7 @@ More information about Spark transformers you can find in
 [documentation](https://spark.apache.org/docs/latest/ml-pipeline.html)
 
 ### PySpark
-Evidently, you can use `BroadcastSpatialJoin` transformer in Scala or Java projects.
+Evidently you can use `BroadcastSpatialJoin` transformer in Scala or Java projects.
 Also there is a Python wrapper for using in PySpark environment:
 
 ```python
@@ -93,8 +93,8 @@ result = trans.transform(df)
 All parameters are String parameters.
 
 `condition, setJoinCondition`
-:  experimental feature, it should be possible to apply extra filter to (input.row, dataset.row) pair
-found as a join candidates by spatial relation. e.g. `fulldate between start_ts and end_ts`
+:  experimental feature, it should be possible to apply extra filter to pair (input.row, dataset.row)
+found by spatial relation as a join candidates. e.g. `fulldate between start_ts and end_ts`
 
 `filter, setDatasetFilter`
 :  SQL expression passed to load `dataset` method in case you need to apply filtering before join.
@@ -118,7 +118,7 @@ spatial relation can be interpreted as "left contains right" if `predicate` is `
 
 `dataColumns, setDataColumns`
 :  column names from `dataset` you need to join to `input`.
-Format: CSV. Any column could be renamed using alias, using " as alias" form.
+Format: CSV. Any selected column can be renamed using alias in form of " as alias".
 For example: `t.setDataColumns("poi_id, name as poi_name")`
 
 `distanceColumnAlias, setDistColAlias`
@@ -150,9 +150,9 @@ lon, lat points). As any other join, it allows you to add selected columns
 Only inner join implemented for now.
 
 geometry
-:  spatial data defined as column containing WKT-formatted primitives: points, polylines, polygons;
-WGS84 coordinate system expected (lon,lat decimal degrees GPS coordinates).
-Points can be represented as two columns: (lon, lat).
+:  spatial data defined as column containing WKT-formatted primitives: points, polylines, polygons.
+WGS84 coordinate system expected (lon,lat decimal degree GPS coordinates).
+Points can be represented as coordinates in two columns: (lon, lat).
 
 input aka input dataset
 :  DataFrame to which transformer is applied, e.g.
@@ -169,7 +169,7 @@ It means that one of the `input` or `external` datasets must be small enough to 
 By default `input` will be broadcasted and `external` will be iterated using flatMap to find
 all the records from `input` that satisfy spatial relation (with `filter` and `condition`).
 
-`broadcast` parameter and `predicate` parameter together defines result of join.
+`broadcast` parameter and `predicate` parameter together defines result of the join.
 For example, consider input that have two rows (2 points) and dataset that have four rows (4 points).
 Let's set predicate to the `nearest`. 
 By default, input will be broadcasted and that means that result table will have four rows:

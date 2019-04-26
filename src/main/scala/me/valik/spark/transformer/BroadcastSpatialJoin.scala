@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Valentin Fedulov <vasnake@gmail.com>
+ *
+ *    Licensed under the Apache License, Version 2.0 (the "License");
+ *    you may not use this file except in compliance with the License.
+ *    You may obtain a copy of the License at
+ *
+ *        http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing, software
+ *    distributed under the License is distributed on an "AS IS" BASIS,
+ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *    See the License for the specific language governing permissions and
+ *    limitations under the License.
+ */
+
 //me.valik.spark.transformer.BroadcastSpatialJoin
 package me.valik.spark.transformer
 
@@ -136,7 +152,14 @@ class BroadcastSpatialJoin(override val uid: String) extends
 
   // config
 
+  /**
+    * Lazy config, mutable for `transformSchema` optimization
+    */
   @transient private var config: Option[TransformerConfig] = None
+
+  /**
+    * Need this for Params extraction helper
+    */
   @transient implicit val self = this
 
   protected def getConfig(spark: SparkSession): TransformerConfig = {
@@ -146,14 +169,24 @@ class BroadcastSpatialJoin(override val uid: String) extends
     })
   }
 
+  /**
+    * Materialization of external dataset, should use some custom metastore probably
+    * @param name `dataset` name defined in transformer parameters
+    * @param spark session
+    * @return external dataset
+    */
   protected def loadDataset(name: String, spark: SparkSession): DataFrame = {
     spark sql s"select * from $name"
   }
 
-  import me.valik.toolbox.StringToolbox.{RichString, DefaultSeparators}
-  import DefaultSeparators.commaColon
-
+  /**
+    * If some parameters in wrong format or invalid, throw an exception
+    */
   private def checkParams(): Unit = {
+    // parameters parsing should be wrapped in designated object
+    import me.valik.toolbox.StringToolbox.{RichString, DefaultSeparators}
+    import DefaultSeparators.commaColon
+
     def checkGeomCols(wkt: String, point: String, name: String) = {
       val nonEmptyGeometries = Seq(point.nonEmpty, wkt.nonEmpty)
       require(nonEmptyGeometries.count(identity) == 1,
@@ -170,7 +203,16 @@ class BroadcastSpatialJoin(override val uid: String) extends
       "dataColumns property must contain at least one column name")
   }
 
+  /**
+    * Parse parameters and build a transformer config object
+    * @param spark session
+    * @return config
+    */
   private def makeConfig(spark: SparkSession): TransformerConfig = {
+    // parameters parsing should be wrapped in designated object
+    import me.valik.toolbox.StringToolbox.{RichString, DefaultSeparators}
+    import DefaultSeparators.commaColon
+
     checkParams()
 
     def parsePointColumns(str: String) = Try {
@@ -229,7 +271,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
   override def copy(extra: ParamMap): BroadcastSpatialJoin = defaultCopy(extra)
 
   /**
-    * You should call it to check schema before starting heavy and long transform
+    * You should call it to check schema before starting heavy and long transformation
     * @param schema input schema
     * @return output schema
     */
@@ -248,6 +290,7 @@ class BroadcastSpatialJoin(override val uid: String) extends
   private def emptyTransform(emptyInput: DataFrame): DataFrame = {
     val conf = getConfig(emptyInput.sparkSession)
     val emptydf = conf.datasetCfg.df.limit(1)
+
     // set external dataset to empty df
     config = Some(conf.copy(datasetCfg=conf.datasetCfg.copy(df=emptydf)))
     val res = transform(emptyInput)
@@ -282,6 +325,10 @@ object BroadcastSpatialJoin extends DefaultParamsReadable[BroadcastSpatialJoin] 
 
   type ExtraConditionFunc = (Row, Row) => Boolean
 
+  /**
+    * Params helper, get trimmed string parameter value
+    * @param p parameter
+    */
   implicit class StringParam(val p: Param[String]) extends AnyVal {
     def get(implicit owner: Params): String = owner.getOrDefault(p).trim
   }
