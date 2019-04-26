@@ -57,6 +57,8 @@ main() {
             installModule
         elif [ "${arg1}" = "run-tests" ]; then
             runTests
+        elif [ "${arg1}" = "build-wheel" ]; then
+            buildWheel
         else
             errorExit "Unknown command '${arg1}'"
         fi
@@ -115,6 +117,11 @@ runTests() {
     export SPARK_JARS SPARK_HOME SPARK_DIST_CLASSPATH
     # ${PYTHON_HOME}/bin/pipenv run pytest -vv --junitxml=./test-report
     ${PYTHON_HOME}/bin/pipenv run pytest -vv -s -x
+}
+
+buildWheel() {
+    ${PYTHON_HOME}/bin/pipenv install wheel==0.30.0 --dev --skip-lock
+    ${PYTHON_HOME}/bin/pipenv run python setup.py bdist_wheel
 }
 
 errorExit() {
