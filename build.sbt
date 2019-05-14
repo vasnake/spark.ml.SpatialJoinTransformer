@@ -3,10 +3,10 @@
 
 val Organization = "me.valik.spark"
 val Name = "spark-transformer-spatialjoin"
-val Version = "0.0.2"
+val Version = "0.0.3-SNAPSHOT"
 
 val ScalaVersion = "2.12.8"
-val SparkVersion = "2.4.1"
+val SparkVersion = "2.4.3"
 
 val sparkDeps = Seq(
   "org.apache.spark" %% "spark-mllib" % SparkVersion,
@@ -16,10 +16,7 @@ val sparkDeps = Seq(
 val testDeps = Seq(
   "org.scalatest" %% "scalatest" % "3.0.5",
   "org.scalacheck" %% "scalacheck" % "1.14.0",
-
-  // not ready yet: unresolved dependency: com.holdenkarau#spark-testing-base_2.12;2.4.0_0.11.0
-  // use local lib (sbt +package) from https://github.com/vasnake/spark-testing-base
-   "com.holdenkarau" %% "spark-testing-base" % "2.4.0_0.11.0"
+  "com.holdenkarau" %% "spark-testing-base" % "2.4.3_0.12.0"
 )
 
 val spatialDeps = Seq(
