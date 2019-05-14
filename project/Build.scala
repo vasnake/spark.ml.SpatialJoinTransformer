@@ -1,7 +1,7 @@
 import sbt._
 
 object Versions {
-  val spatialSpark = "v1.2.2"
+  val spatialSpark = "v1.2.3"
 }
 
 object Projects {
