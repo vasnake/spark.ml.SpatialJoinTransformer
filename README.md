@@ -1,8 +1,6 @@
 # spark.ml.SpatialJoinTransformer
 
-[![Build Status](https://travis-ci.com/vasnake/spark.ml.SpatialJoinTransformer.svg?branch=master)](https://travis-ci.com/vasnake/spark.ml.SpatialJoinTransformer)
-
-It is a [spark.ml.Transformer](https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.ml.Transformer)
+It is a [spark.ml.Transformer](https://spark.apache.org/docs/latest/api/scala/org/apache/spark/ml/PipelineStage.html)
 that joins input dataset with external data using
 Spatial Relations Predicates.
 
@@ -186,3 +184,7 @@ that satisfy defined conditions (spatial and extra).
 In this scenario we need to broadcast the `right` dataset, hence it should be small enough.
 As you can see, `broadcast` parameter defines which of two datasets will be `right`
 and then another will be `left`.
+
+## Related
+
+Spatial functions as Spark (Hive) UDFs https://github.com/azavea/hiveless
